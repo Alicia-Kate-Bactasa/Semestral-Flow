@@ -5,6 +5,8 @@ const cors = require('cors');
 const mongoose = require('mongoose');
 const path = require('path');
 const prospectusRoutes = require('./routes/prospectus');
+const authRoutes = require('./routes/auth');
+const petitionRoutes = require('./routes/petitions');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -24,7 +26,7 @@ const mongoUri = process.env.MONGODB_URI || (
     : `mongodb://localhost:27017/${dbName}`
 );
 
-// Connect Mongoose with Graceful Fallback
+// Connect Mongoose
 mongoose.connect(mongoUri, {
   serverSelectionTimeoutMS: 3000
 }).then(() => {
@@ -42,7 +44,9 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Mount Prospectus & DAG Engine Routes
+// Mount Routes
+app.use('/api/auth', authRoutes);
+app.use('/api/petitions', petitionRoutes);
 app.use('/api', prospectusRoutes);
 
 // Serve Static React Frontend Production Build
