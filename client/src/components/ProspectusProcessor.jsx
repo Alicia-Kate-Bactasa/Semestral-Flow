@@ -1,14 +1,14 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, CheckSquare, Sparkles, X, AlertCircle } from 'lucide-react';
+import { Search, Check, Sparkles, ArrowRight, RotateCcw, BookOpen, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function ProspectusProcessor({ user }) {
   const [program, setProgram] = useState(user?.program || 'IT');
-  const [failedCourses, setFailedCourses] = useState(['CIS 1101']);
-  const [isModalOpen, setIsModalOpen] = useState(false);
+  const [failedCourses, setFailedCourses] = useState([]);
+  const [isWizardOpen, setIsWizardOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
   const [availableCourses, setAvailableCourses] = useState([]);
   const [scheduleResult, setScheduleResult] = useState(null);
-  const [isCalculated, setIsCalculated] = useState(false);
+  const [hasGeneratedPlan, setHasGeneratedPlan] = useState(false);
 
   // Fetch Course Catalog for selected Program
   useEffect(() => {
@@ -22,14 +22,14 @@ export default function ProspectusProcessor({ user }) {
           }
         }
       } catch (err) {
-        console.warn('Backend server API offline, using catalog fallback');
+        console.warn('Catalog fetch fallback:', err);
       }
     }
     fetchCourses();
   }, [program]);
 
-  // Recalculate Prospectus Schedule via Backend API
-  const calculateCustomPath = useCallback(async () => {
+  // Generate custom academic plan
+  const generatePlan = useCallback(async () => {
     try {
       const response = await fetch('/api/generate-prospectus', {
         method: 'POST',
@@ -48,20 +48,15 @@ export default function ProspectusProcessor({ user }) {
         const resData = await response.json();
         if (resData.success) {
           setScheduleResult(resData.data);
-          setIsCalculated(true);
+          setHasGeneratedPlan(true);
         }
       }
     } catch (err) {
-      console.warn('Fallback to standard calculation:', err);
+      console.warn('Plan generation fallback:', err);
     }
   }, [program, failedCourses, user]);
 
-  // Initial calculation on load
-  useEffect(() => {
-    calculateCustomPath();
-  }, [calculateCustomPath]);
-
-  // Toggle Failed Course checkmark
+  // Toggle failed subject checkmark
   const toggleFailedCourse = (code) => {
     if (failedCourses.includes(code)) {
       setFailedCourses(failedCourses.filter(c => c !== code));
@@ -70,7 +65,7 @@ export default function ProspectusProcessor({ user }) {
     }
   };
 
-  // Group catalog courses by Year Level and Semester for normal prospectus view
+  // Group catalog courses by Year and Term
   const groupedCurriculum = availableCourses.reduce((acc, course) => {
     const key = `Year ${course.yearLevel} • ${course.semester} Semester`;
     if (!acc[key]) acc[key] = [];
@@ -78,131 +73,148 @@ export default function ProspectusProcessor({ user }) {
     return acc;
   }, {});
 
-  // Filter courses in modal search
+  // Filter courses for wizard checklist
   const filteredCourses = availableCourses.filter(c => 
     c.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
+    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
       
-      {/* Top Banner Card (Circular 3xl Radius) */}
-      <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4">
-        <div>
-          <div className="flex items-center space-x-2">
-            <span className="text-xs font-bold text-slate-900 bg-slate-100 px-3 py-0.5 rounded-full border border-slate-200/60">
-              {program} Program
-            </span>
-            <span className="text-xs text-slate-500 font-medium">Student ID: {user?.username || '21102941'}</span>
-          </div>
-          <h1 className="text-2xl font-bold text-slate-900 mt-1">Academic Prospectus</h1>
-          <p className="text-xs text-slate-500 font-normal">
-            View your standard curriculum flow or generate a custom path if you failed any subjects.
-          </p>
-        </div>
+      {/* Friendly Welcome Hero Banner */}
+      <div className="bg-white rounded-3xl border border-slate-200/80 p-8 text-center space-y-4 shadow-card">
+        <span className="px-4 py-1 text-xs font-semibold text-brand-600 bg-brand-50 rounded-full border border-brand-100 inline-block">
+          Simple Academic Planning
+        </span>
 
-        {/* Primary Circular Action Button */}
-        <button
-          onClick={() => setIsModalOpen(true)}
-          className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-full text-xs shadow-subtle transition-all duration-200 flex items-center justify-center space-x-2"
-        >
-          <Sparkles className="w-4 h-4 text-white" />
-          <span>Plan Your Academic Path!</span>
-        </button>
+        <h1 className="text-3xl font-bold text-slate-900 tracking-tight">
+          Hi {user?.name?.split(' ')[0] || 'Student'}, let's organize your subjects!
+        </h1>
+        
+        <p className="text-sm text-slate-500 max-w-lg mx-auto font-normal">
+          Confused with your academic path? <span className="text-slate-800 font-medium">Let me help you!</span> Select an option below to get started.
+        </p>
+
+        {/* 2 Big Friendly Beginner Cards */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 max-w-2xl mx-auto pt-4">
+          
+          {/* Option A: Plan Custom Path */}
+          <div
+            onClick={() => setIsWizardOpen(true)}
+            className="p-6 bg-slate-900 text-white rounded-3xl cursor-pointer hover:bg-slate-800 transition-all text-left space-y-2 group shadow-subtle"
+          >
+            <div className="flex justify-between items-center">
+              <span className="w-8 h-8 rounded-full bg-brand-500 text-white flex items-center justify-center font-bold text-xs">1</span>
+              <Sparkles className="w-4 h-4 text-brand-400 group-hover:scale-110 transition-transform" />
+            </div>
+            <h3 className="text-base font-bold">I failed / missed a subject</h3>
+            <p className="text-xs text-slate-300 font-normal">Tell us what you missed and we'll calculate your next subjects step-by-step.</p>
+          </div>
+
+          {/* Option B: Standard Prospectus */}
+          <div
+            onClick={() => { setFailedCourses([]); setHasGeneratedPlan(false); }}
+            className="p-6 bg-slate-50 text-slate-900 rounded-3xl border border-slate-200/80 cursor-pointer hover:bg-slate-100 transition-all text-left space-y-2 group"
+          >
+            <div className="flex justify-between items-center">
+              <span className="w-8 h-8 rounded-full bg-slate-200 text-slate-700 flex items-center justify-center font-bold text-xs">2</span>
+              <BookOpen className="w-4 h-4 text-slate-400" />
+            </div>
+            <h3 className="text-base font-bold">Show standard prospectus</h3>
+            <p className="text-xs text-slate-500 font-normal">View the regular, term-by-term course catalog for your degree.</p>
+          </div>
+
+        </div>
       </div>
 
-      {/* Main Content Area */}
-      {isCalculated && failedCourses.length > 0 ? (
-        /* RECALCULATED CUSTOM PATH VIEW */
-        <div className="space-y-6">
-          <div className="flex items-center justify-between bg-slate-50 p-4 rounded-3xl border border-slate-200/80">
-            <div>
-              <h2 className="text-sm font-bold text-slate-900">Custom Recalculated Prospectus Path</h2>
-              <p className="text-xs text-slate-500">
-                Adjusted schedule resolving {failedCourses.length} failed subject(s): <strong className="text-slate-800">{failedCourses.join(', ')}</strong>
-              </p>
+      {/* RESULT VIEW: CUSTOM PLAN FOR BEGINNERS */}
+      {hasGeneratedPlan && (
+        <div className="space-y-6 animate-fadeIn">
+          
+          {/* Status Header */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card flex items-center justify-between">
+            <div className="flex items-center space-x-3">
+              <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+                <CheckCircle2 className="w-5 h-5" />
+              </div>
+              <div>
+                <h2 className="text-base font-bold text-slate-900">Your Recommended Next Term Schedule</h2>
+                <p className="text-xs text-slate-500">
+                  {failedCourses.length > 0 
+                    ? `Adjusted to help you retake: ${failedCourses.join(', ')}` 
+                    : 'Standard prerequisite schedule'}
+                </p>
+              </div>
             </div>
+
             <button
-              onClick={() => setIsModalOpen(true)}
-              className="text-xs font-semibold text-brand-600 hover:text-brand-700 bg-white px-4 py-1.5 rounded-full border border-slate-200/80 shadow-subtle"
+              onClick={() => setIsWizardOpen(true)}
+              className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold rounded-full text-xs transition-colors flex items-center space-x-1.5"
             >
-              Modify Failed Courses
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Change Subjects</span>
             </button>
           </div>
 
-          {/* Warning Banner if prerequisite lockouts occurred */}
+          {/* Warning Banner if graduation is delayed */}
           {scheduleResult?.criticalPathWarnings?.length > 0 && (
-            <div className="bg-rose-50 border border-rose-200 rounded-3xl p-4 text-xs text-rose-900 space-y-1">
-              <div className="font-bold flex items-center space-x-1.5 text-rose-800">
-                <AlertCircle className="w-4 h-4 text-rose-600" />
-                <span>Prerequisite Lockout Delay Detected</span>
+            <div className="bg-rose-50 border border-rose-200 rounded-3xl p-5 text-xs text-rose-900 flex items-start space-x-3">
+              <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div>
+                <p className="font-bold text-rose-800">Prerequisite Chain Alert</p>
+                <p className="text-rose-700 mt-0.5">
+                  Failing these subjects locks downstream courses for next semester. You will retake them first before taking higher-level subjects.
+                </p>
               </div>
-              <p className="text-[11px] text-rose-700">
-                {scheduleResult.criticalPathWarnings[0]?.message}
-              </p>
             </div>
           )}
 
-          {/* Scheduled Term Grid */}
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            
-            {/* Term 1: Target Term */}
-            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <span className="text-xs font-bold text-slate-900">Next Upcoming Term</span>
-                <span className="text-xs font-bold text-brand-600 bg-brand-50 px-3 py-0.5 rounded-full border border-brand-100">{scheduleResult?.totalScheduledUnits || 0} Units</span>
-              </div>
-
-              <div className="space-y-2">
-                {scheduleResult?.packedSchedule.map(course => (
-                  <div key={course.code} className="p-3.5 rounded-2xl border border-slate-100 bg-white flex items-center justify-between">
-                    <div>
-                      <div className="flex items-center space-x-2">
-                        <span className="font-bold text-xs text-slate-900">{course.code}</span>
-                        {course.status === 'retake_required' && (
-                          <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
-                            Retake
-                          </span>
-                        )}
-                      </div>
-                      <p className="text-xs text-slate-600">{course.title}</p>
-                    </div>
-                    <span className="text-xs font-bold text-slate-900">{course.units}u</span>
-                  </div>
-                ))}
-              </div>
+          {/* Beginner Friendly Recommended Subjects List */}
+          <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <span className="text-xs font-bold text-slate-900">Recommended Subjects to Take Next</span>
+              <span className="text-xs font-bold text-brand-600 bg-brand-50 px-3 py-1 rounded-full border border-brand-100">
+                Total: {scheduleResult?.totalScheduledUnits || 0} Units
+              </span>
             </div>
 
-            {/* Term 2: Next Prerequisites & Extended Path */}
-            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card space-y-3">
-              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                <span className="text-xs font-bold text-slate-900">Follow-up Term (Prerequisite Unlocks)</span>
-                <span className="text-xs font-semibold text-slate-500">Subsequent Semester</span>
-              </div>
-
-              <div className="space-y-2">
-                {scheduleResult?.blockedPool.slice(0, 4).map(course => (
-                  <div key={course.code} className="p-3.5 rounded-2xl border border-slate-100 bg-slate-50/50 flex items-center justify-between">
-                    <div>
-                      <span className="font-bold text-xs text-slate-700">{course.code}</span>
-                      <p className="text-xs text-slate-500">{course.title}</p>
-                      <p className="text-[10px] text-rose-600">Blocked by: {course.blockedBy?.join(', ')}</p>
+            <div className="space-y-2.5">
+              {scheduleResult?.packedSchedule.map(course => (
+                <div key={course.code} className="p-4 rounded-2xl border border-slate-100 bg-white flex items-center justify-between hover:border-slate-200 transition-colors">
+                  <div className="space-y-0.5">
+                    <div className="flex items-center space-x-2">
+                      <span className="font-bold text-sm text-slate-900">{course.code}</span>
+                      {course.status === 'retake_required' ? (
+                        <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2.5 py-0.5 rounded-full">
+                          Must Retake First
+                        </span>
+                      ) : (
+                        <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2.5 py-0.5 rounded-full">
+                          Ready to Enroll
+                        </span>
+                      )}
                     </div>
-                    <span className="text-xs font-bold text-slate-500">{course.units}u</span>
+                    <p className="text-xs text-slate-600">{course.title}</p>
                   </div>
-                ))}
-              </div>
-            </div>
 
+                  <span className="text-xs font-bold text-slate-900 bg-slate-50 px-3 py-1 rounded-full border border-slate-200/60">
+                    {course.units} Units
+                  </span>
+                </div>
+              ))}
+            </div>
           </div>
+
         </div>
-      ) : (
-        /* STANDARD PROSPECTUS VIEW */
+      )}
+
+      {/* DEFAULT VIEW: STANDARD PROSPECTUS (If wizard not yet run) */}
+      {!hasGeneratedPlan && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-sm font-bold text-slate-900">Complete Program Prospectus Flow</h2>
-            <span className="text-xs text-slate-500">Standard Course Catalog</span>
+            <h2 className="text-base font-bold text-slate-900">Full {program} Curriculum Prospectus</h2>
+            <span className="text-xs text-slate-500">Regular 4-Year Schedule</span>
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -210,8 +222,8 @@ export default function ProspectusProcessor({ user }) {
               <div key={termTitle} className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card space-y-3">
                 <div className="flex items-center justify-between pb-2 border-b border-slate-100">
                   <span className="text-xs font-bold text-slate-900">{termTitle}</span>
-                  <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
-                    {groupedCurriculum[termTitle].reduce((sum, c) => sum + c.units, 0)} Total Units
+                  <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-3 py-0.5 rounded-full">
+                    {groupedCurriculum[termTitle].reduce((sum, c) => sum + c.units, 0)} Units
                   </span>
                 </div>
 
@@ -219,13 +231,8 @@ export default function ProspectusProcessor({ user }) {
                   {groupedCurriculum[termTitle].map(c => (
                     <div key={c.code} className="p-3 rounded-2xl border border-slate-100 bg-white flex items-center justify-between">
                       <div>
-                        <div className="flex items-center space-x-2">
-                          <span className="font-bold text-xs text-slate-900">{c.code}</span>
-                          {c.prerequisites?.length > 0 && (
-                            <span className="text-[10px] text-slate-400">Prereq: {c.prerequisites.join(', ')}</span>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-600 font-medium">{c.title}</p>
+                        <span className="font-bold text-xs text-slate-900">{c.code}</span>
+                        <p className="text-xs text-slate-600">{c.title}</p>
                       </div>
                       <span className="text-xs font-bold text-slate-900">{c.units}u</span>
                     </div>
@@ -237,35 +244,35 @@ export default function ProspectusProcessor({ user }) {
         </div>
       )}
 
-      {/* PLAN YOUR ACADEMIC PATH MODAL (Circular 3xl Radius) */}
-      {isModalOpen && (
+      {/* BEGINNER-FRIENDLY WIZARD MODAL */}
+      {isWizardOpen && (
         <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white rounded-3xl p-6 max-w-lg w-full shadow-card border border-slate-200 space-y-5 animate-fadeIn">
+          <div className="bg-white rounded-3xl p-6 sm:p-8 max-w-lg w-full shadow-card border border-slate-200 space-y-6 animate-fadeIn">
             
-            {/* Modal Header */}
-            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+            {/* Header */}
+            <div className="border-b border-slate-100 pb-4 flex items-center justify-between">
               <div>
-                <h3 className="text-base font-bold text-slate-900">Plan Your Academic Path!</h3>
-                <p className="text-xs text-slate-500">Check any subjects you failed or need to retake</p>
+                <span className="text-[11px] font-bold text-brand-600 uppercase tracking-wider">Step 1 of 2</span>
+                <h3 className="text-lg font-bold text-slate-900 mt-0.5">Which subjects did you miss?</h3>
               </div>
               <button
-                onClick={() => setIsModalOpen(false)}
-                className="p-1.5 rounded-full text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+                onClick={() => setIsWizardOpen(false)}
+                className="w-8 h-8 rounded-full bg-slate-100 text-slate-500 hover:text-slate-800 flex items-center justify-center transition-colors"
               >
-                <X className="w-5 h-5" />
+                ✕
               </button>
             </div>
 
-            {/* Circular Program Switcher */}
+            {/* Program Pills */}
             <div>
-              <label className="block text-xs font-semibold text-slate-700 mb-1 ml-2">Select Program</label>
+              <label className="block text-xs font-semibold text-slate-700 mb-1.5 ml-2">Academic Program</label>
               <div className="grid grid-cols-3 gap-2 bg-slate-100 p-1 rounded-full border border-slate-200/60">
                 {['IT', 'CS', 'IS'].map(prog => (
                   <button
                     key={prog}
                     type="button"
                     onClick={() => setProgram(prog)}
-                    className={`py-1.5 text-xs font-bold rounded-full transition-colors ${
+                    className={`py-1.5 text-xs font-bold rounded-full transition-all ${
                       program === prog
                         ? 'bg-white text-slate-900 shadow-subtle'
                         : 'text-slate-500 hover:text-slate-900'
@@ -277,76 +284,69 @@ export default function ProspectusProcessor({ user }) {
               </div>
             </div>
 
-            {/* Circular Search filter */}
+            {/* Search Input */}
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3.5 top-2.5 text-slate-400" />
+              <Search className="w-4 h-4 absolute left-4 top-3 text-slate-400" />
               <input
                 type="text"
-                placeholder="Search subject code (e.g. CIS 1101)..."
+                placeholder="Type course code or title (e.g. CIS 1101)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-4 py-2 bg-slate-50 border border-slate-200 rounded-full text-xs text-slate-800 focus:outline-none focus:border-brand-500"
+                className="w-full pl-10 pr-4 py-2.5 bg-slate-50 border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:border-brand-500"
               />
             </div>
 
-            {/* Checklist of Courses */}
-            <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
+            {/* Subject Checkbox List */}
+            <div className="max-h-60 overflow-y-auto space-y-2 pr-1">
               {filteredCourses.map(c => {
                 const isChecked = failedCourses.includes(c.code);
                 return (
                   <div
                     key={c.code}
                     onClick={() => toggleFailedCourse(c.code)}
-                    className={`flex items-center justify-between p-3 rounded-2xl border cursor-pointer transition-colors ${
+                    className={`flex items-center justify-between p-3.5 rounded-2xl border cursor-pointer transition-all ${
                       isChecked
-                        ? 'bg-rose-50 border-rose-200'
+                        ? 'bg-rose-50 border-rose-300'
                         : 'bg-white border-slate-100 hover:bg-slate-50'
                     }`}
                   >
-                    <div className="flex items-center space-x-2.5">
-                      <div className={`w-4 h-4 rounded-full flex items-center justify-center ${
-                        isChecked ? 'bg-rose-500 text-white' : 'border border-slate-300'
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-5 h-5 rounded-full flex items-center justify-center transition-colors ${
+                        isChecked ? 'bg-rose-500 text-white' : 'border border-slate-300 bg-white'
                       }`}>
-                        {isChecked && <CheckSquare className="w-3.5 h-3.5 stroke-[3]" />}
+                        {isChecked && <Check className="w-3 h-3 stroke-[3]" />}
                       </div>
                       <div>
                         <p className={`text-xs font-bold ${isChecked ? 'text-rose-900' : 'text-slate-800'}`}>{c.code}</p>
-                        <p className="text-[10px] text-slate-500 line-clamp-1">{c.title}</p>
+                        <p className="text-[11px] text-slate-500">{c.title}</p>
                       </div>
                     </div>
-                    <span className="text-[10px] font-medium text-slate-400 bg-slate-50 px-2 py-0.5 rounded-full">
-                      Yr {c.yearLevel}-{c.semester}
+
+                    <span className="text-[10px] text-slate-400 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                      Year {c.yearLevel}
                     </span>
                   </div>
                 );
               })}
             </div>
 
-            {/* Circular Action Buttons */}
-            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+            {/* Submit Button */}
+            <div className="pt-3 border-t border-slate-100 flex items-center justify-between">
               <span className="text-xs text-slate-500 font-medium ml-2">
-                {failedCourses.length} subject(s) marked failed
+                {failedCourses.length} subject(s) selected
               </span>
 
-              <div className="flex space-x-2">
-                <button
-                  type="button"
-                  onClick={() => setIsModalOpen(false)}
-                  className="px-4 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-full text-xs transition-colors"
-                >
-                  Cancel
-                </button>
-                <button
-                  type="button"
-                  onClick={() => {
-                    calculateCustomPath();
-                    setIsModalOpen(false);
-                  }}
-                  className="px-5 py-1.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-full text-xs shadow-subtle transition-colors"
-                >
-                  Generate Path
-                </button>
-              </div>
+              <button
+                type="button"
+                onClick={() => {
+                  generatePlan();
+                  setIsWizardOpen(false);
+                }}
+                className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-full text-xs transition-all flex items-center space-x-2 shadow-subtle"
+              >
+                <span>Calculate My Plan</span>
+                <ArrowRight className="w-4 h-4" />
+              </button>
             </div>
 
           </div>
