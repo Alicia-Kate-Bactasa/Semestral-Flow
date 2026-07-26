@@ -53,10 +53,10 @@ app.use('/api', prospectusRoutes);
 const clientBuildPath = path.join(__dirname, 'client', 'build');
 app.use(express.static(clientBuildPath));
 
-// Catch-all route for Express 5 (path-to-regexp v8 compatible)
-app.get('(.*)', (req, res, next) => {
+// Fail-proof SPA Fallback Middleware (No regex parsing needed)
+app.use((req, res, next) => {
   if (req.path.startsWith('/api')) {
-    return next();
+    return res.status(404).json({ success: false, message: 'API endpoint not found' });
   }
   res.sendFile(path.join(clientBuildPath, 'index.html'));
 });
