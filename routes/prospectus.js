@@ -6,7 +6,7 @@ const { loadPrivateSeedData, seedDatabase } = require('../seedProspectus');
 
 /**
  * POST /api/generate-prospectus
- * Calculates the 3-step DAG prospectus schedule
+ * Calculates the irregular student DAG prospectus schedule
  */
 router.post('/generate-prospectus', async (req, res) => {
   try {
@@ -14,8 +14,8 @@ router.post('/generate-prospectus', async (req, res) => {
       program = 'IT',
       passedCourses = [],
       failedCourses = [],
-      targetYearLevel = 2,
-      targetSemester = '1st',
+      completedSemestersCount = 1,
+      customTermPlans = {},
       exceptionFlags = {}
     } = req.body;
 
@@ -23,8 +23,8 @@ router.post('/generate-prospectus', async (req, res) => {
       program,
       passedCourses,
       failedCourses,
-      targetYearLevel: parseInt(targetYearLevel, 10) || 1,
-      targetSemester,
+      completedSemestersCount: parseInt(completedSemestersCount, 10) || 1,
+      customTermPlans,
       exceptionFlags
     });
 
