@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Check, Sparkles, ArrowRight, RotateCcw, BookOpen, AlertCircle, CheckCircle2, Sun } from 'lucide-react';
+import { Search, Check, Sparkles, ArrowRight, RotateCcw, BookOpen, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
 
 export default function ProspectusProcessor({ user }) {
   const [program, setProgram] = useState(user?.program || 'IT');
@@ -31,7 +31,7 @@ export default function ProspectusProcessor({ user }) {
     fetchCourses();
   }, [program]);
 
-  // Generate custom academic plan across all years
+  // Generate custom academic plan across all years with slot replacements
   const generatePlan = useCallback(async () => {
     try {
       const response = await fetch('/api/generate-prospectus', {
@@ -74,49 +74,33 @@ export default function ProspectusProcessor({ user }) {
     c.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
-  // Map DAG node states if plan generated
-  const dagStateMap = new Map();
-  if (scheduleResult?.dagNodes) {
-    scheduleResult.dagNodes.forEach(node => {
-      dagStateMap.set(node.id, node.state);
-    });
-  }
+  // Determine Year Level Tabs
+  const regeneratedTerms = scheduleResult?.regeneratedTerms || [];
+  const maxYearInRegenerated = Math.max(4, ...regeneratedTerms.map(t => t.yearLevel));
+  const yearTabs = hasGeneratedPlan ? Array.from({ length: maxYearInRegenerated }, (_, i) => i + 1) : [1, 2, 3, 4];
 
-  // Check if failing subjects forces an extension beyond Year 4
-  const hasExtension = scheduleResult?.blockedPool?.some(b => b.yearLevel >= 4);
-  const yearTabs = hasExtension ? [1, 2, 3, 4, 5] : [1, 2, 3, 4];
-
-  // Group catalog courses by Year Level and Semester (Including Summer Term)
-  const coursesByYear = {
-    1: {
-      '1st Semester': availableCourses.filter(c => c.yearLevel === 1 && (c.semester === '1st' || c.semester === '1')),
-      '2nd Semester': availableCourses.filter(c => c.yearLevel === 1 && (c.semester === '2nd' || c.semester === '2')),
-      'Summer Term': availableCourses.filter(c => c.yearLevel === 1 && (c.semester === 'Summer' || c.semester === '3rd' || c.semester === '3')),
-    },
-    2: {
-      '1st Semester': availableCourses.filter(c => c.yearLevel === 2 && (c.semester === '1st' || c.semester === '1')),
-      '2nd Semester': availableCourses.filter(c => c.yearLevel === 2 && (c.semester === '2nd' || c.semester === '2')),
-      'Summer Term': availableCourses.filter(c => c.yearLevel === 2 && (c.semester === 'Summer' || c.semester === '3rd' || c.semester === '3')),
-    },
-    3: {
-      '1st Semester': availableCourses.filter(c => c.yearLevel === 3 && (c.semester === '1st' || c.semester === '1')),
-      '2nd Semester': availableCourses.filter(c => c.yearLevel === 3 && (c.semester === '2nd' || c.semester === '2')),
-      'Summer Term': availableCourses.filter(c => c.yearLevel === 3 && (c.semester === 'Summer' || c.semester === '3rd' || c.semester === '3')),
-    },
-    4: {
-      '1st Semester': availableCourses.filter(c => c.yearLevel === 4 && (c.semester === '1st' || c.semester === '1')),
-      '2nd Semester': availableCourses.filter(c => c.yearLevel === 4 && (c.semester === '2nd' || c.semester === '2')),
-      'Summer Term': availableCourses.filter(c => c.yearLevel === 4 && (c.semester === 'Summer' || c.semester === '3rd' || c.semester === '3')),
-    },
-    5: {
-      '1st Semester': scheduleResult?.blockedPool?.filter(b => b.yearLevel >= 4) || [],
-      '2nd Semester': [],
-      'Summer Term': [],
+  // Group catalog / regenerated courses by Year Level and Semester
+  const getCoursesForYearAndSem = (year, semType) => {
+    if (hasGeneratedPlan && regeneratedTerms.length > 0) {
+      const matchingTerm = regeneratedTerms.find(t => t.yearLevel === year && (t.semester === semType || (semType === 'Summer Term' && t.semester === 'Summer')));
+      return matchingTerm ? matchingTerm.courses : [];
     }
+    
+    // Default catalog grouping
+    if (semType === '1st Semester') {
+      return availableCourses.filter(c => c.yearLevel === year && (c.semester === '1st' || c.semester === '1'));
+    } else if (semType === '2nd Semester') {
+      return availableCourses.filter(c => c.yearLevel === year && (c.semester === '2nd' || c.semester === '2'));
+    } else if (semType === 'Summer Term') {
+      return availableCourses.filter(c => c.yearLevel === year && (c.semester === 'Summer' || c.semester === '3rd' || c.semester === '3'));
+    }
+    return [];
   };
 
-  const currentYearData = coursesByYear[activeYearTab] || { '1st Semester': [], '2nd Semester': [], 'Summer Term': [] };
-  const hasSummerCourses = currentYearData['Summer Term'] && currentYearData['Summer Term'].length > 0;
+  const sem1Courses = getCoursesForYearAndSem(activeYearTab, '1st Semester');
+  const sem2Courses = getCoursesForYearAndSem(activeYearTab, '2nd Semester');
+  const summerCourses = getCoursesForYearAndSem(activeYearTab, 'Summer Term');
+  const hasSummerCourses = summerCourses.length > 0;
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -148,7 +132,7 @@ export default function ProspectusProcessor({ user }) {
               <Sparkles className="w-4 h-4 text-brand-400 group-hover:scale-110 transition-transform" />
             </div>
             <h3 className="text-base font-bold">I failed / missed a subject</h3>
-            <p className="text-xs text-slate-300 font-normal">Tell us what you missed and we'll recalculate your entire prospectus from Year 1 to graduation.</p>
+            <p className="text-xs text-slate-300 font-normal">Tell us what you missed and we'll generate a new prospectus replacing locked slots with eligible minors.</p>
           </div>
 
           {/* Option B: Standard Prospectus */}
@@ -161,7 +145,7 @@ export default function ProspectusProcessor({ user }) {
               <BookOpen className="w-4 h-4 text-slate-400" />
             </div>
             <h3 className="text-base font-bold">Show standard prospectus</h3>
-            <p className="text-xs text-slate-500 font-normal">View the regular course catalog (1st Sem, 2nd Sem & Summer) for your degree.</p>
+            <p className="text-xs text-slate-500 font-normal">View the regular 4-year course catalog for your degree.</p>
           </div>
 
         </div>
@@ -169,16 +153,16 @@ export default function ProspectusProcessor({ user }) {
 
       {/* RECALCULATED PLAN SUMMARY BANNER (If plan generated) */}
       {hasGeneratedPlan && (
-        <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card flex items-center justify-between animate-fadeIn">
+        <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center">
+            <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
               <CheckCircle2 className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="text-base font-bold text-slate-900">Custom Recalculated Prospectus Active</h2>
+              <h2 className="text-base font-bold text-slate-900">New Recalculated Prospectus Generated!</h2>
               <p className="text-xs text-slate-500">
                 {failedCourses.length > 0 
-                  ? `Recalculated full flow to resolve failed subject(s): ${failedCourses.join(', ')}` 
+                  ? `Replaced locked course slots with eligible Minor/GE subjects to resolve: ${failedCourses.join(', ')}` 
                   : 'Displaying standard 4-year curriculum path'}
               </p>
             </div>
@@ -186,24 +170,11 @@ export default function ProspectusProcessor({ user }) {
 
           <button
             onClick={() => setIsWizardOpen(true)}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold rounded-full text-xs transition-colors flex items-center space-x-1.5"
+            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold rounded-full text-xs transition-colors flex items-center space-x-1.5 shrink-0"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             <span>Modify Failed Courses</span>
           </button>
-        </div>
-      )}
-
-      {/* Warning Banner if prerequisite lockouts occurred */}
-      {hasGeneratedPlan && scheduleResult?.criticalPathWarnings?.length > 0 && (
-        <div className="bg-rose-50 border border-rose-200 rounded-3xl p-5 text-xs text-rose-900 flex items-start space-x-3">
-          <AlertCircle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
-          <div>
-            <p className="font-bold text-rose-800">Prerequisite Lockout Delay Notice</p>
-            <p className="text-rose-700 mt-0.5">
-              Failing prerequisite subjects locks downstream higher-level courses. Below, locked courses are highlighted with a 🔒 badge.
-            </p>
-          </div>
         </div>
       )}
 
@@ -216,7 +187,7 @@ export default function ProspectusProcessor({ user }) {
             <h2 className="text-base font-bold text-slate-900">
               {hasGeneratedPlan ? `Recalculated BS ${program} Prospectus` : `Full BS ${program} Prospectus`}
             </h2>
-            <p className="text-xs text-slate-500">Select year tab to view 1st Sem, 2nd Sem, and Summer in one screen</p>
+            <p className="text-xs text-slate-500">Select year tab to view all semesters in one screen</p>
           </div>
 
           {/* Circular Year Level Drawer Tabs */}
@@ -231,7 +202,7 @@ export default function ProspectusProcessor({ user }) {
                     : 'text-slate-600 hover:text-slate-900'
                 }`}
               >
-                {year === 5 ? 'Year 5 (Extended)' : `Year ${year}`}
+                {year > 4 ? `Year ${year} (Extended)` : `Year ${year}`}
               </button>
             ))}
           </div>
@@ -243,52 +214,50 @@ export default function ProspectusProcessor({ user }) {
           {/* 1st Semester Card */}
           <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-900">Year {activeYearTab} • 1st Semester</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                Year {activeYearTab} • 1st Semester
+              </span>
               <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
-                {(currentYearData['1st Semester'] || []).reduce((sum, c) => sum + c.units, 0).toFixed(1)} Total Units
+                {sem1Courses.reduce((sum, c) => sum + c.units, 0).toFixed(1)} Total Units
               </span>
             </div>
 
             <div className="space-y-2.5">
-              {(!currentYearData['1st Semester'] || currentYearData['1st Semester'].length === 0) ? (
+              {sem1Courses.length === 0 ? (
                 <p className="text-center py-6 text-slate-400 text-xs">No courses scheduled.</p>
               ) : (
-                currentYearData['1st Semester'].map(c => {
-                  const state = dagStateMap.get(c.code);
-                  const isFailed = failedCourses.includes(c.code);
-                  const isEnrolled = scheduleResult?.packedSchedule?.some(ps => ps.code === c.code);
-
-                  return (
-                    <div key={c.code} className="p-3.5 rounded-2xl border border-slate-100 bg-white flex items-center justify-between hover:border-slate-200 transition-colors">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-bold text-xs text-slate-900">{c.code}</span>
-                          
-                          {hasGeneratedPlan && isFailed && (
-                            <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
-                              Must Retake
-                            </span>
-                          )}
-                          {hasGeneratedPlan && !isFailed && isEnrolled && (
-                            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                              Scheduled Next
-                            </span>
-                          )}
-                          {hasGeneratedPlan && state === 'blocked' && (
-                            <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                              🔒 Prereq Locked
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-600 font-normal">{c.title}</p>
+                sem1Courses.map(c => (
+                  <div key={c.code} className="p-3.5 rounded-2xl border border-slate-100 bg-white flex items-center justify-between hover:border-slate-200 transition-colors">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-xs text-slate-900">{c.code}</span>
+                        
+                        {/* Dynamic Status Badges for Replaced/Pulled-Forward/Retake */}
+                        {c.status === 'retake_required' && (
+                          <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                            Must Retake
+                          </span>
+                        )}
+                        {c.status === 'minor_replaced' && (
+                          <span className="text-[10px] font-bold text-brand-700 bg-brand-50 border border-brand-200 px-2 py-0.5 rounded-full flex items-center space-x-1">
+                            <RefreshCw className="w-2.5 h-2.5" />
+                            <span>Replaced with Minor</span>
+                          </span>
+                        )}
+                        {c.status === 'pulled_forward' && (
+                          <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
+                            Pulled Forward
+                          </span>
+                        )}
                       </div>
-
-                      <span className="text-[11px] font-semibold text-slate-500 bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200/60 shrink-0 ml-2">
-                        {Number(c.units).toFixed(1)}
-                      </span>
+                      <p className="text-xs text-slate-600 font-normal">{c.title}</p>
                     </div>
-                  );
-                })
+
+                    <span className="text-[11px] font-semibold text-slate-500 bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200/60 shrink-0 ml-2">
+                      {Number(c.units).toFixed(1)}
+                    </span>
+                  </div>
+                ))
               )}
             </div>
           </div>
@@ -296,52 +265,50 @@ export default function ProspectusProcessor({ user }) {
           {/* 2nd Semester Card */}
           <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-900">Year {activeYearTab} • 2nd Semester</span>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-900">
+                Year {activeYearTab} • 2nd Semester
+              </span>
               <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
-                {(currentYearData['2nd Semester'] || []).reduce((sum, c) => sum + c.units, 0).toFixed(1)} Total Units
+                {sem2Courses.reduce((sum, c) => sum + c.units, 0).toFixed(1)} Total Units
               </span>
             </div>
 
             <div className="space-y-2.5">
-              {(!currentYearData['2nd Semester'] || currentYearData['2nd Semester'].length === 0) ? (
+              {sem2Courses.length === 0 ? (
                 <p className="text-center py-6 text-slate-400 text-xs">No courses scheduled.</p>
               ) : (
-                currentYearData['2nd Semester'].map(c => {
-                  const state = dagStateMap.get(c.code);
-                  const isFailed = failedCourses.includes(c.code);
-                  const isEnrolled = scheduleResult?.packedSchedule?.some(ps => ps.code === c.code);
-
-                  return (
-                    <div key={c.code} className="p-3.5 rounded-2xl border border-slate-100 bg-white flex items-center justify-between hover:border-slate-200 transition-colors">
-                      <div className="space-y-0.5">
-                        <div className="flex items-center space-x-2">
-                          <span className="font-bold text-xs text-slate-900">{c.code}</span>
-                          
-                          {hasGeneratedPlan && isFailed && (
-                            <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
-                              Must Retake
-                            </span>
-                          )}
-                          {hasGeneratedPlan && !isFailed && isEnrolled && (
-                            <span className="text-[10px] font-semibold text-emerald-700 bg-emerald-50 border border-emerald-200 px-2 py-0.5 rounded-full">
-                              Scheduled Next
-                            </span>
-                          )}
-                          {hasGeneratedPlan && state === 'blocked' && (
-                            <span className="text-[10px] font-semibold text-amber-700 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
-                              🔒 Prereq Locked
-                            </span>
-                          )}
-                        </div>
-                        <p className="text-xs text-slate-600 font-normal">{c.title}</p>
+                sem2Courses.map(c => (
+                  <div key={c.code} className="p-3.5 rounded-2xl border border-slate-100 bg-white flex items-center justify-between hover:border-slate-200 transition-colors">
+                    <div className="space-y-0.5">
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-xs text-slate-900">{c.code}</span>
+                        
+                        {/* Dynamic Status Badges for Replaced/Pulled-Forward/Retake */}
+                        {c.status === 'retake_required' && (
+                          <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
+                            Must Retake
+                          </span>
+                        )}
+                        {c.status === 'minor_replaced' && (
+                          <span className="text-[10px] font-bold text-brand-700 bg-brand-50 border border-brand-200 px-2 py-0.5 rounded-full flex items-center space-x-1">
+                            <RefreshCw className="w-2.5 h-2.5" />
+                            <span>Replaced with Minor</span>
+                          </span>
+                        )}
+                        {c.status === 'pulled_forward' && (
+                          <span className="text-[10px] font-semibold text-purple-700 bg-purple-50 border border-purple-200 px-2 py-0.5 rounded-full">
+                            Pulled Forward
+                          </span>
+                        )}
                       </div>
-
-                      <span className="text-[11px] font-semibold text-slate-500 bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200/60 shrink-0 ml-2">
-                        {Number(c.units).toFixed(1)}
-                      </span>
+                      <p className="text-xs text-slate-600 font-normal">{c.title}</p>
                     </div>
-                  );
-                })
+
+                    <span className="text-[11px] font-semibold text-slate-500 bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200/60 shrink-0 ml-2">
+                      {Number(c.units).toFixed(1)}
+                    </span>
+                  </div>
+                ))
               )}
             </div>
           </div>
@@ -350,17 +317,16 @@ export default function ProspectusProcessor({ user }) {
           {hasSummerCourses && (
             <div className="bg-amber-50/40 rounded-3xl border border-amber-200/60 p-6 shadow-card space-y-4">
               <div className="flex items-center justify-between pb-3 border-b border-amber-100">
-                <span className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center space-x-1.5">
-                  <Sun className="w-3.5 h-3.5 text-amber-600" />
-                  <span>Year {activeYearTab} • Summer Term</span>
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-900">
+                  Year {activeYearTab} • Summer Term
                 </span>
                 <span className="text-[11px] font-semibold text-amber-800 bg-amber-100/80 px-2.5 py-0.5 rounded-full">
-                  {(currentYearData['Summer Term'] || []).reduce((sum, c) => sum + c.units, 0).toFixed(1)} Total Units
+                  {summerCourses.reduce((sum, c) => sum + c.units, 0).toFixed(1)} Total Units
                 </span>
               </div>
 
               <div className="space-y-2.5">
-                {currentYearData['Summer Term'].map(c => (
+                {summerCourses.map(c => (
                   <div key={c.code} className="p-3.5 rounded-2xl border border-amber-200/60 bg-white flex items-center justify-between hover:border-amber-300 transition-colors">
                     <div className="space-y-0.5">
                       <span className="font-bold text-xs text-slate-900">{c.code}</span>

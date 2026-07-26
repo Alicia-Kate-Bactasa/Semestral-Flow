@@ -3,24 +3,17 @@ const Course = require('../models/Course');
 const mongoose = require('mongoose');
 
 /**
- * Core 3-Step Directed Acyclic Graph (DAG) Scheduling Pipeline
+ * Core 3-Step Directed Acyclic Graph (DAG) Multi-Term Prospectus Regeneration Engine
  */
 async function generateProspectusSchedule({
   program = 'IT',
   passedCourses = [],
   failedCourses = [],
-  targetYearLevel = 2,
-  targetSemester = '1st',
+  targetYearLevel = 1,
+  targetSemester = '2nd',
   exceptionFlags = {}
 }) {
-  const {
-    courseOverride = false,
-    overload = false,
-    simultaneous = false,
-    petitionNeeded = false
-  } = exceptionFlags;
-
-  // 1. Fetch Course Nodes for Program (Instant fallback if DB disconnected)
+  // 1. Fetch Course Nodes for Program
   let allCourses = [];
   try {
     if (mongoose.connection.readyState === 1) {
@@ -39,206 +32,160 @@ async function generateProspectusSchedule({
   const passedSet = new Set(passedCourses);
   const failedSet = new Set(failedCourses);
 
-  // Maximum unit load
-  const maxUnits = overload ? 27 : 21;
+  // Define terms sequence for full 4 to 5 year simulation
+  const termsSequence = [
+    { yearLevel: 1, semester: '1st', label: 'Year 1 • 1st Semester' },
+    { yearLevel: 1, semester: '2nd', label: 'Year 1 • 2nd Semester' },
+    { yearLevel: 1, semester: 'Summer', label: 'Year 1 • Summer Term' },
+    { yearLevel: 2, semester: '1st', label: 'Year 2 • 1st Semester' },
+    { yearLevel: 2, semester: '2nd', label: 'Year 2 • 2nd Semester' },
+    { yearLevel: 2, semester: 'Summer', label: 'Year 2 • Summer Term' },
+    { yearLevel: 3, semester: '1st', label: 'Year 3 • 1st Semester' },
+    { yearLevel: 3, semester: '2nd', label: 'Year 3 • 2nd Semester' },
+    { yearLevel: 3, semester: 'Summer', label: 'Year 3 • Summer Term' },
+    { yearLevel: 4, semester: '1st', label: 'Year 4 • 1st Semester' },
+    { yearLevel: 4, semester: '2nd', label: 'Year 4 • 2nd Semester' },
+    { yearLevel: 4, semester: 'Summer', label: 'Year 4 • Summer Term' },
+    { yearLevel: 5, semester: '1st', label: 'Year 5 • 1st Semester (Extended)' },
+    { yearLevel: 5, semester: '2nd', label: 'Year 5 • 2nd Semester (Extended)' },
+  ];
 
-  // =========================================================================
-  // STEP 1: FORWARD TRAVERSAL / BLOCKED VECTOR CALCULATION (DFS/BFS DAG)
-  // =========================================================================
-  // Find all courses transitively locked out because a prerequisite was failed
-  const blockedVectorMap = new Map(); // courseCode -> { directBlocker, fullChain: [] }
+  // Track completed courses dynamically as we simulate term-by-term
+  const currentCompleted = new Set([...passedSet].filter(c => !failedSet.has(c)));
+  const pendingFailedRetakes = new Set(failedSet);
+  const remainingCourses = new Set(allCourses.map(c => c.code));
+  
+  // Remove already completed courses
+  currentCompleted.forEach(code => remainingCourses.delete(code));
 
-  // Build Adjacency List for Downstream Dependency: Parent Course -> Child Courses
-  const downstreamAdj = new Map();
-  allCourses.forEach(c => {
-    (c.prerequisites || []).forEach(pre => {
-      if (!downstreamAdj.has(pre)) downstreamAdj.set(pre, []);
-      downstreamAdj.get(pre).push(c.code);
-    });
-    // Also include explicit ifFailCannotTake rules
-    (c.ifFailCannotTake || []).forEach(failChild => {
-      if (!downstreamAdj.has(c.code)) downstreamAdj.set(c.code, []);
-      if (!downstreamAdj.get(c.code).includes(failChild)) {
-        downstreamAdj.get(c.code).push(failChild);
-      }
-    });
-  });
+  const regeneratedTerms = [];
+  const maxUnitsPerTerm = 21;
 
-  // Recursive BFS/DFS to propagate blocked status down the graph
-  function traverseBlockedVector(failedCode, rootCauseCode, visited = new Set()) {
-    const children = downstreamAdj.get(failedCode) || [];
-    for (const childCode of children) {
-      if (visited.has(childCode)) continue;
-      visited.add(childCode);
+  for (const termInfo of termsSequence) {
+    if (remainingCourses.size === 0 && pendingFailedRetakes.size === 0) {
+      break; // All courses completed!
+    }
 
-      if (!blockedVectorMap.has(childCode)) {
-        blockedVectorMap.set(childCode, {
-          courseCode: childCode,
-          directBlocker: failedCode,
-          rootCause: rootCauseCode,
-          blockedBy: [failedCode, rootCauseCode]
+    let termUnits = 0;
+    const termScheduled = [];
+    const passedThisTerm = [];
+
+    // -----------------------------------------------------------------------
+    // PRIORITY 1: Retake Failed Courses First
+    // -----------------------------------------------------------------------
+    for (const failedCode of Array.from(pendingFailedRetakes)) {
+      const course = courseMap.get(failedCode);
+      if (!course) continue;
+
+      // Check if prerequisites for retake are cleared
+      const prereqsMet = (course.prerequisites || []).every(pre => currentCompleted.has(pre));
+      if (prereqsMet && (termUnits + course.units <= maxUnitsPerTerm)) {
+        termUnits += course.units;
+        termScheduled.push({
+          ...course,
+          yearLevel: termInfo.yearLevel,
+          semester: termInfo.semester,
+          status: 'retake_required',
+          statusLabel: 'Retake Subject',
+          isReplacement: false
         });
-      }
-      // Recursive step down the DAG
-      traverseBlockedVector(childCode, rootCauseCode, visited);
-    }
-  }
-
-  // Execute Forward Traversal for all failed courses
-  failedSet.forEach(failedCode => {
-    traverseBlockedVector(failedCode, failedCode);
-  });
-
-  // =========================================================================
-  // STEP 2: ELIGIBLE POOL EXTRACTION
-  // =========================================================================
-  const eligiblePool = [];
-  const blockedPool = [];
-  const backlogPool = []; // Failed courses from earlier terms that must be retaken
-
-  const currentStandingYear = targetYearLevel;
-
-  allCourses.forEach(course => {
-    const isPassed = passedSet.has(course.code) && !failedSet.has(course.code);
-    if (isPassed) return; // Exclude completed subjects
-
-    const isFailed = failedSet.has(course.code);
-    const isTargetTerm = (course.yearLevel === targetYearLevel && course.semester === targetSemester);
-    const isEarlierTerm = (course.yearLevel < targetYearLevel) || 
-                         (course.yearLevel === targetYearLevel && isTermBefore(course.semester, targetSemester));
-
-    // Check Standing Requirements
-    let standingCheckPassed = true;
-    if (course.standingRequirement && course.standingRequirement !== 'None') {
-      const requiredYear = parseInt(course.standingRequirement, 10);
-      if (!isNaN(requiredYear) && currentStandingYear < requiredYear) {
-        standingCheckPassed = false;
+        passedThisTerm.push(failedCode);
+        pendingFailedRetakes.delete(failedCode);
+        remainingCourses.delete(failedCode);
       }
     }
 
-    // Check Prerequisite Blocking
-    const missingPrereqs = (course.prerequisites || []).filter(pre => {
-      if (failedSet.has(pre)) return true;
-      if (!passedSet.has(pre)) {
-        return true;
-      }
-      return false;
-    });
+    // -----------------------------------------------------------------------
+    // PRIORITY 2: Regular Term Courses (Prerequisites Met)
+    // -----------------------------------------------------------------------
+    const regularTermCandidates = Array.from(remainingCourses)
+      .map(code => courseMap.get(code))
+      .filter(c => c && c.yearLevel === termInfo.yearLevel && (c.semester === termInfo.semester || c.semester === '1st' || c.semester === '2nd'));
 
-    const isBlockedByDAG = missingPrereqs.length > 0 || blockedVectorMap.has(course.code);
-
-    let status = 'eligible';
-    let exceptionActive = false;
-
-    if (isFailed) {
-      status = 'retake_required';
-      backlogPool.push(course);
-    } else if (!standingCheckPassed) {
-      status = 'standing_blocked';
-    } else if (isBlockedByDAG) {
-      if (courseOverride) {
-        status = 'override_waived';
-        exceptionActive = true;
-      } else if (simultaneous) {
-        status = 'simultaneous_coenroll';
-        exceptionActive = true;
-      } else if (petitionNeeded) {
-        status = 'petition_requested';
-        exceptionActive = true;
-      } else {
-        status = 'prereq_blocked';
+    for (const course of regularTermCandidates) {
+      if (!remainingCourses.has(course.code)) continue;
+      
+      const prereqsMet = (course.prerequisites || []).every(pre => currentCompleted.has(pre));
+      if (prereqsMet && (termUnits + course.units <= maxUnitsPerTerm)) {
+        termUnits += course.units;
+        termScheduled.push({
+          ...course,
+          yearLevel: termInfo.yearLevel,
+          semester: termInfo.semester,
+          status: 'regular_scheduled',
+          statusLabel: 'Regular Schedule',
+          isReplacement: false
+        });
+        passedThisTerm.push(course.code);
+        remainingCourses.delete(course.code);
       }
     }
 
-    const itemPayload = {
-      ...course,
-      status,
-      missingPrereqs,
-      blockedBy: blockedVectorMap.get(course.code)?.blockedBy || missingPrereqs,
-      downstreamCount: (downstreamAdj.get(course.code) || []).length,
-      exceptionActive
-    };
+    // -----------------------------------------------------------------------
+    // PRIORITY 3: Slot Replacements (Pull Forward Minors / GE / No-Prereq Subjects)
+    // -----------------------------------------------------------------------
+    // If unit space remains because a major was locked by a failed prerequisite,
+    // fill the slot with eligible Minor/GE subjects or higher-year subjects with no prereqs!
+    if (termUnits < maxUnitsPerTerm && remainingCourses.size > 0) {
+      const replacementCandidates = Array.from(remainingCourses)
+        .map(code => courseMap.get(code))
+        .filter(c => {
+          if (!c) return false;
+          // Must have prerequisites met
+          const prereqsMet = (c.prerequisites || []).every(pre => currentCompleted.has(pre));
+          return prereqsMet;
+        })
+        .sort((a, b) => {
+          // Prioritize Minors, GE, PE, NSTP
+          const isAMinor = a.code.startsWith('GE-') || a.code.startsWith('NSTP') || a.code.startsWith('TPE') || a.code.startsWith('EDM');
+          const isBMinor = b.code.startsWith('GE-') || b.code.startsWith('NSTP') || b.code.startsWith('TPE') || b.code.startsWith('EDM');
+          if (isAMinor && !isBMinor) return -1;
+          if (!isAMinor && isBMinor) return 1;
+          return a.yearLevel - b.yearLevel;
+        });
 
-    if (status === 'prereq_blocked' || status === 'standing_blocked') {
-      blockedPool.push(itemPayload);
-    } else if (isTargetTerm || isFailed || (isEarlierTerm && !isPassed)) {
-      eligiblePool.push(itemPayload);
+      for (const course of replacementCandidates) {
+        if (!remainingCourses.has(course.code)) continue;
+        if (termUnits + course.units <= maxUnitsPerTerm) {
+          const isPulledForward = course.yearLevel > termInfo.yearLevel;
+          const isMinor = course.code.startsWith('GE-') || course.code.startsWith('NSTP') || course.code.startsWith('TPE') || course.code.startsWith('EDM');
+
+          termUnits += course.units;
+          termScheduled.push({
+            ...course,
+            yearLevel: termInfo.yearLevel,
+            semester: termInfo.semester,
+            status: isMinor ? 'minor_replaced' : 'pulled_forward',
+            statusLabel: isMinor ? 'Replaced with Minor' : 'Pulled Forward',
+            isReplacement: true
+          });
+          passedThisTerm.push(course.code);
+          remainingCourses.delete(course.code);
+        }
+      }
     }
-  });
 
-  // Helper to determine term ordering
-  function isTermBefore(semA, semB) {
-    const order = { '1st': 1, '2nd': 2, 'Summer': 3 };
-    return (order[semA] || 1) < (order[semB] || 1);
-  }
+    // Advance completed subjects at end of term
+    passedThisTerm.forEach(code => currentCompleted.add(code));
 
-  // =========================================================================
-  // STEP 3: KNAPSACK OPTIMIZATION (TERM PACKING & CRITICAL PATH PRIORITY)
-  // =========================================================================
-  eligiblePool.forEach(item => {
-    let priority = 50;
-    if (item.status === 'retake_required') {
-      priority += 50; // Critical path retake
-    }
-    if (item.downstreamCount > 0) {
-      priority += (item.downstreamCount * 10);
-    }
-    if (item.code.startsWith('GE-') || item.code.startsWith('NSTP') || item.code.startsWith('TPE')) {
-      priority -= 20; // De-prioritize general education if unit space is tight
-    }
-    item.priorityScore = priority;
-  });
-
-  // Sort eligible candidates by priority score descending
-  eligiblePool.sort((a, b) => b.priorityScore - a.priorityScore);
-
-  const packedSchedule = [];
-  const unitCappedPool = [];
-  let currentUnits = 0;
-
-  for (const candidate of eligiblePool) {
-    if (currentUnits + candidate.units <= maxUnits) {
-      currentUnits += candidate.units;
-      packedSchedule.push({
-        ...candidate,
-        scheduled: true
-      });
-    } else {
-      unitCappedPool.push({
-        ...candidate,
-        status: 'unit_capped',
-        scheduled: false,
-        reason: `Exceeds term capacity of ${maxUnits} units.`
+    if (termScheduled.length > 0) {
+      regeneratedTerms.push({
+        yearLevel: termInfo.yearLevel,
+        semester: termInfo.semester,
+        label: termInfo.label,
+        totalUnits: termUnits,
+        courses: termScheduled
       });
     }
   }
 
-  // Critical Path Warnings
-  const criticalPathWarnings = blockedPool.map(b => ({
-    code: b.code,
-    title: b.title,
-    blockedBy: b.blockedBy,
-    message: `[${b.code}] ${b.title} is locked because prerequisite (${b.blockedBy.join(', ')}) was not completed. Delays ${b.downstreamCount} downstream subjects.`
-  }));
-
-  // Visual DAG Graph Structure for frontend Canvas / Graph renderers
-  const dagNodes = allCourses.map(c => {
-    let state = 'unlocked';
-    if (passedSet.has(c.code)) state = 'completed';
-    else if (failedSet.has(c.code)) state = 'failed';
-    else if (blockedVectorMap.has(c.code)) state = 'blocked';
-    else if (packedSchedule.some(ps => ps.code === c.code)) state = 'enrolled';
-
+  // Critical path warnings
+  const criticalPathWarnings = Array.from(failedSet).map(code => {
+    const course = courseMap.get(code);
     return {
-      id: c.code,
-      label: `${c.code}`,
-      title: c.title,
-      units: c.units,
-      yearLevel: c.yearLevel,
-      semester: c.semester,
-      prerequisites: c.prerequisites || [],
-      downstream: downstreamAdj.get(c.code) || [],
-      state
+      code,
+      title: course?.title || code,
+      message: `[${code}] was marked failed. Locked downstream prerequisites were automatically replaced with eligible minor/GE subjects, and major retakes were rescheduled.`
     };
   });
 
@@ -246,16 +193,20 @@ async function generateProspectusSchedule({
     program,
     targetYearLevel,
     targetSemester,
-    maxUnits,
-    totalScheduledUnits: currentUnits,
-    isOverloaded: currentUnits > 21,
-    exceptionFlags,
-    packedSchedule,
-    unitCappedPool,
-    blockedPool,
+    maxUnits: maxUnitsPerTerm,
+    totalScheduledUnits: regeneratedTerms[0]?.totalUnits || 0,
+    packedSchedule: regeneratedTerms[0]?.courses || [],
+    regeneratedTerms,
+    blockedPool: [],
     criticalPathWarnings,
-    dagNodes,
-    blockedVector: Array.from(blockedVectorMap.values())
+    dagNodes: allCourses.map(c => ({
+      id: c.code,
+      title: c.title,
+      units: c.units,
+      yearLevel: c.yearLevel,
+      semester: c.semester,
+      state: failedSet.has(c.code) ? 'failed' : (passedSet.has(c.code) ? 'completed' : 'unlocked')
+    }))
   };
 }
 
