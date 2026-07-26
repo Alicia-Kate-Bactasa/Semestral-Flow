@@ -4,8 +4,8 @@ const mongoose = require('mongoose');
 
 /**
  * Core Directed Acyclic Graph (DAG) Prospectus Generator
- * Recalculates full multi-year prospectus replacing locked major slots with Minors/GEs,
- * placing retakes in their eligible sem, and shifting delayed major chains into future/extended terms.
+ * Retakes of failed subjects occur AFTER the term they were failed.
+ * Displaced major slots are replaced with eligible Minors/GEs, and dependent major chains shift cleanly.
  */
 async function generateProspectusSchedule({
   program = 'IT',
@@ -56,6 +56,14 @@ async function generateProspectusSchedule({
     { yearLevel: 5, semester: '2nd', label: 'Year 5 • 2nd Semester (Extended)', maxUnits: 21 },
   ];
 
+  // Helper to check if term B is strictly AFTER term A
+  function isTermAfter(yearA, semA, yearB, semB) {
+    if (yearB > yearA) return true;
+    if (yearB < yearA) return false;
+    const order = { '1st': 1, '2nd': 2, 'Summer': 3 };
+    return (order[semB] || 1) > (order[semA] || 1);
+  }
+
   // Dynamically track completed courses as we simulate term-by-term
   const currentCompleted = new Set([...passedSet].filter(c => !failedSet.has(c)));
   const pendingFailedRetakes = new Set(failedSet);
@@ -65,7 +73,6 @@ async function generateProspectusSchedule({
   currentCompleted.forEach(code => remainingCourses.delete(code));
 
   const regeneratedTerms = [];
-  let maxScheduledYear = 4;
   let hasExtendedTerms = false;
 
   for (const termInfo of termsSequence) {
@@ -81,26 +88,31 @@ async function generateProspectusSchedule({
     const passedThisTerm = [];
 
     // -----------------------------------------------------------------------
-    // STEP 1: Retake Failed Subjects (First Priority in earliest eligible term)
+    // STEP 1: Retake Failed Subjects (Can only happen in terms AFTER original failed term)
     // -----------------------------------------------------------------------
     for (const failedCode of Array.from(pendingFailedRetakes)) {
       const course = courseMap.get(failedCode);
       if (!course) continue;
 
-      const prereqsMet = (course.prerequisites || []).every(pre => currentCompleted.has(pre));
-      if (prereqsMet && (termUnits + course.units <= termMaxUnits)) {
-        termUnits += course.units;
-        termScheduled.push({
-          ...course,
-          yearLevel: termInfo.yearLevel,
-          semester: termInfo.semester,
-          status: 'retake_required',
-          statusLabel: 'Retake Subject',
-          isReplacement: false
-        });
-        passedThisTerm.push(failedCode);
-        pendingFailedRetakes.delete(failedCode);
-        remainingCourses.delete(failedCode);
+      // Retake can only happen in a term AFTER the course's original year/semester
+      const canRetakeThisTerm = isTermAfter(course.yearLevel, course.semester, termInfo.yearLevel, termInfo.semester);
+
+      if (canRetakeThisTerm) {
+        const prereqsMet = (course.prerequisites || []).every(pre => currentCompleted.has(pre));
+        if (prereqsMet && (termUnits + course.units <= termMaxUnits)) {
+          termUnits += course.units;
+          termScheduled.push({
+            ...course,
+            yearLevel: termInfo.yearLevel,
+            semester: termInfo.semester,
+            status: 'retake_required',
+            statusLabel: 'Retake Subject',
+            isReplacement: false
+          });
+          passedThisTerm.push(failedCode);
+          pendingFailedRetakes.delete(failedCode);
+          remainingCourses.delete(failedCode);
+        }
       }
     }
 
@@ -112,8 +124,8 @@ async function generateProspectusSchedule({
         .map(code => courseMap.get(code))
         .filter(c => {
           if (!c) return false;
-          // Matches current year/sem or earlier year whose prerequisites are now cleared
-          return c.yearLevel <= termInfo.yearLevel;
+          // Only schedule courses whose original term is at or before current term
+          return !isTermAfter(c.yearLevel, c.semester, termInfo.yearLevel, termInfo.semester);
         });
 
       for (const course of regularTermCandidates) {
@@ -121,13 +133,15 @@ async function generateProspectusSchedule({
         
         const prereqsMet = (course.prerequisites || []).every(pre => currentCompleted.has(pre));
         if (prereqsMet && (termUnits + course.units <= termMaxUnits)) {
+          const isDelayed = isTermAfter(course.yearLevel, course.semester, termInfo.yearLevel, termInfo.semester) || course.yearLevel < termInfo.yearLevel;
+
           termUnits += course.units;
           termScheduled.push({
             ...course,
             yearLevel: termInfo.yearLevel,
             semester: termInfo.semester,
-            status: course.yearLevel < termInfo.yearLevel ? 'delayed_unlocked' : 'regular_scheduled',
-            statusLabel: course.yearLevel < termInfo.yearLevel ? 'Delayed Subject (Unlocked)' : 'Regular Schedule',
+            status: isDelayed ? 'delayed_unlocked' : 'regular_scheduled',
+            statusLabel: isDelayed ? 'Rescheduled Subject' : 'Regular Schedule',
             isReplacement: false
           });
           passedThisTerm.push(course.code);
@@ -209,7 +223,6 @@ async function generateProspectusSchedule({
       if (termInfo.yearLevel > 4) {
         hasExtendedTerms = true;
       }
-      maxScheduledYear = Math.max(maxScheduledYear, termInfo.yearLevel);
 
       regeneratedTerms.push({
         yearLevel: termInfo.yearLevel,
