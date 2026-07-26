@@ -85,64 +85,84 @@ async function generateProspectusSchedule({
   const regeneratedTerms = [];
   const historicalSummary = [];
 
+  // Build term lookup
+  const recordMap = new Map();
   if (Array.isArray(historicalTermRecords)) {
-    historicalTermRecords.forEach(record => {
-      if (record.termIndex <= completedSemestersCount && Array.isArray(record.courses)) {
-        const termInfo = termsSequence.find(t => t.termIndex === record.termIndex) || {
-          yearLevel: Math.ceil(record.termIndex / 3),
-          semester: '1st',
-          label: `Term ${record.termIndex}`,
-          maxUnits: 21
-        };
+    historicalTermRecords.forEach(r => recordMap.set(r.termIndex, r));
+  }
 
-        const termCourses = record.courses.map(entry => {
-          const course = courseMap.get(entry.code) || {
-            code: entry.code,
-            title: entry.title || entry.code,
-            units: entry.units || 3,
-            yearLevel: termInfo.yearLevel,
-            semester: termInfo.semester,
-            prerequisites: []
-          };
+  for (let t = 1; t <= completedSemestersCount; t++) {
+    const termInfo = termsSequence.find(ts => ts.termIndex === t) || {
+      yearLevel: Math.ceil(t / 3),
+      semester: '1st',
+      label: `Term ${t}`,
+      maxUnits: 21
+    };
 
-          const isPassed = entry.status === 'passed';
-          const isFailed = entry.status === 'failed';
+    const record = recordMap.get(t);
+    let termCourseEntries = [];
 
-          if (isPassed) {
-            PassedCourses.add(course.code);
-            FailedOrPending.delete(course.code); // Un-fail if passed in any historical term!
-          } else if (isFailed) {
-            if (!PassedCourses.has(course.code)) {
-              FailedOrPending.add(course.code);
-            }
-          }
-
-          return {
-            ...course,
-            yearLevel: termInfo.yearLevel,
-            semester: termInfo.semester,
-            status: isFailed ? 'failed_historical' : (isPassed ? 'passed_historical' : 'unspecified'),
-            statusLabel: isFailed ? 'Failed Subject' : 'Passed',
-            isMinor: isMinorCourse(course.code),
-            isReplacement: false
-          };
-        });
-
-        const termData = {
-          id: `hist_${record.termIndex}`,
+    if (record && Array.isArray(record.courses) && record.courses.length > 0) {
+      termCourseEntries = record.courses.map(entry => {
+        const course = courseMap.get(entry.code) || {
+          code: entry.code,
+          title: entry.title || entry.code,
+          units: entry.units || 3,
           yearLevel: termInfo.yearLevel,
           semester: termInfo.semester,
-          label: termInfo.label,
-          isCompleted: true,
-          totalUnits: termCourses.reduce((sum, c) => sum + (c.units || 0), 0),
-          maxUnits: termInfo.maxUnits,
-          courses: termCourses
+          prerequisites: []
         };
+        const isPassed = entry.status === 'passed';
+        const isFailed = entry.status === 'failed';
+        return { course, isPassed, isFailed };
+      });
+    } else {
+      // Auto-populate standard curriculum for unedited historical term
+      const stdCourses = allCourses.filter(c => {
+        if (c.yearLevel !== termInfo.yearLevel) return false;
+        return isCourseOfferedInSem(c, termInfo.semester);
+      });
+      termCourseEntries = stdCourses.map(c => ({
+        course: c,
+        isPassed: !FailedOrPending.has(c.code),
+        isFailed: FailedOrPending.has(c.code)
+      }));
+    }
 
-        regeneratedTerms.push(termData);
-        historicalSummary.push(termData);
+    const termCourses = termCourseEntries.map(({ course, isPassed, isFailed }) => {
+      if (isPassed) {
+        PassedCourses.add(course.code);
+        FailedOrPending.delete(course.code);
+      } else if (isFailed) {
+        if (!PassedCourses.has(course.code)) {
+          FailedOrPending.add(course.code);
+        }
       }
+
+      return {
+        ...course,
+        yearLevel: termInfo.yearLevel,
+        semester: termInfo.semester,
+        status: isFailed ? 'failed_historical' : (isPassed ? 'passed_historical' : 'unspecified'),
+        statusLabel: isFailed ? 'Failed Subject' : 'Passed',
+        isMinor: isMinorCourse(course.code),
+        isReplacement: false
+      };
     });
+
+    const termData = {
+      id: `hist_${t}`,
+      yearLevel: termInfo.yearLevel,
+      semester: termInfo.semester,
+      label: termInfo.label,
+      isCompleted: true,
+      totalUnits: termCourses.reduce((sum, c) => sum + (c.units || 0), 0),
+      maxUnits: termInfo.maxUnits,
+      courses: termCourses
+    };
+
+    regeneratedTerms.push(termData);
+    historicalSummary.push(termData);
   }
 
   // -------------------------------------------------------------------------
@@ -300,7 +320,6 @@ async function generateProspectusSchedule({
   }
 
   // Extension & Delay Calculation
-  const futureTermsScheduled = regeneratedTerms.filter(t => !t.isCompleted);
   const totalRegularTermsCount = regeneratedTerms.filter(t => !t.semester.includes('Summer')).length;
   const lastScheduledTerm = regeneratedTerms[regeneratedTerms.length - 1];
 
@@ -315,7 +334,7 @@ async function generateProspectusSchedule({
   const isDelayed = totalRegularTermsCount > 8 || (lastScheduledTerm && lastScheduledTerm.yearLevel > 4);
   const extraSemesters = isDelayed ? Math.max(1, totalRegularTermsCount - 8) : 0;
 
-  const gradSemLabel = lastScheduledTerm ? lastScheduledTerm.label : 'Year 4 • 1st Semester';
+  const gradSemLabel = lastScheduledTerm ? lastScheduledTerm.label : 'Year 4 • 2nd Semester';
 
   return {
     program,

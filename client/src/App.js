@@ -104,14 +104,14 @@ export default function App() {
     }));
   };
 
-  // Step 2 Sub-step A: Sem Count Select (Starts 100% EMPTY by default as requested!)
+  // Step 2 Sub-step A: Sem Count Select (Pre-populates past terms with standard curriculum as Passed by default!)
   const handleSelectSemesters = (count) => {
     setSemestersCount(count);
     setAuditTermIndex(0);
 
     const initialRecords = {};
     for (let t = 1; t <= count; t++) {
-      initialRecords[t] = []; // 100% EMPTY by default!
+      initialRecords[t] = getStandardCoursesForTerm(t);
     }
 
     setHistoricalRecords(initialRecords);
@@ -424,7 +424,7 @@ export default function App() {
                 </div>
 
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Select and mark what you <strong>actually enrolled in and passed/failed</strong> in this semester:
+                  Pre-populated with standard courses. Mark what you <strong>actually passed or failed</strong>, or add/remove courses:
                 </p>
 
                 <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
