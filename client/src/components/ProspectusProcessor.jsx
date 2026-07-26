@@ -79,19 +79,29 @@ export default function ProspectusProcessor({ user }) {
   const maxYearInRegenerated = Math.max(4, ...regeneratedTerms.map(t => t.yearLevel));
   const yearTabs = hasGeneratedPlan ? Array.from({ length: maxYearInRegenerated }, (_, i) => i + 1) : [1, 2, 3, 4];
 
-  // Group catalog / regenerated courses by Year Level and Semester
+  // Helper to reliably pull courses for Year & Semester type
   const getCoursesForYearAndSem = (year, semType) => {
+    const isSem1 = semType.startsWith('1st');
+    const isSem2 = semType.startsWith('2nd');
+    const isSummer = semType.startsWith('Summer');
+
     if (hasGeneratedPlan && regeneratedTerms.length > 0) {
-      const matchingTerm = regeneratedTerms.find(t => t.yearLevel === year && (t.semester === semType || (semType === 'Summer Term' && t.semester === 'Summer')));
+      const matchingTerm = regeneratedTerms.find(t => {
+        if (t.yearLevel !== year) return false;
+        if (isSem1 && (t.semester === '1st' || t.semester === '1')) return true;
+        if (isSem2 && (t.semester === '2nd' || t.semester === '2')) return true;
+        if (isSummer && (t.semester === 'Summer' || t.semester === '3rd' || t.semester === '3')) return true;
+        return false;
+      });
       return matchingTerm ? matchingTerm.courses : [];
     }
     
     // Default catalog grouping
-    if (semType === '1st Semester') {
+    if (isSem1) {
       return availableCourses.filter(c => c.yearLevel === year && (c.semester === '1st' || c.semester === '1'));
-    } else if (semType === '2nd Semester') {
+    } else if (isSem2) {
       return availableCourses.filter(c => c.yearLevel === year && (c.semester === '2nd' || c.semester === '2'));
-    } else if (semType === 'Summer Term') {
+    } else if (isSummer) {
       return availableCourses.filter(c => c.yearLevel === year && (c.semester === 'Summer' || c.semester === '3rd' || c.semester === '3'));
     }
     return [];
