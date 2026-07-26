@@ -45,7 +45,9 @@ async function startServer() {
         // ==========================================
         app.use(express.static(path.join(__dirname, 'client/build')));
 
-        app.get('*', (req, res) => {
+        // Use a safe regex catch-all route that handles React routing 
+        // without conflicting with express router path-to-regexp parsing
+        app.get(/^(?!\/api).+/, (req, res) => {
             res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
         });
 
