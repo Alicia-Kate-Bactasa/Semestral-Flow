@@ -4,11 +4,6 @@ const mongoose = require('mongoose');
 
 /**
  * Core Directed Acyclic Graph (DAG) Prospectus Generator for Irregular Students
- * 
- * 3-PHASE PIPELINE:
- * Phase 1: Transcript Normalization & Permanent Blacklist (PassedCourses Set) & Retake Queue (FailedOrPending Set)
- * Phase 2: Curriculum Filtering & Prerequisite Verification (DAG Traversal with Standing Waiver & Downstream Bottleneck Priority)
- * Phase 3: Knapsack Credit Packing, Timeline Projection & Audit History Summary
  */
 async function generateProspectusSchedule({
   program = 'IT',
@@ -157,7 +152,7 @@ async function generateProspectusSchedule({
   const remainingCurriculum = allCourses.filter(course => !PassedCourses.has(course.code));
   const remainingCoursesSet = new Set(remainingCurriculum.map(c => c.code));
 
-  // Retake Queue: Failed or pending courses not yet passed
+  // Retake Queue: Failed or pending courses not yet passed in PassedCourses
   const pendingFailedRetakes = new Set(Array.from(FailedOrPending).filter(code => !PassedCourses.has(code)));
 
   let highestActiveTermIndex = completedSemestersCount;
@@ -305,7 +300,8 @@ async function generateProspectusSchedule({
   }
 
   // Extension & Delay Calculation
-  const totalRegularTermsScheduled = regeneratedTerms.filter(t => !t.semester.includes('Summer')).length;
+  const futureTermsScheduled = regeneratedTerms.filter(t => !t.isCompleted);
+  const totalRegularTermsCount = regeneratedTerms.filter(t => !t.semester.includes('Summer')).length;
   const lastScheduledTerm = regeneratedTerms[regeneratedTerms.length - 1];
 
   const completedUnits = Array.from(PassedCourses).reduce((sum, code) => {
@@ -316,10 +312,10 @@ async function generateProspectusSchedule({
   const totalCurriculumUnits = allCourses.reduce((sum, c) => sum + c.units, 0);
   const remainingUnits = Math.max(0, totalCurriculumUnits - completedUnits);
 
-  const isDelayed = totalRegularTermsScheduled > 8 || (lastScheduledTerm && lastScheduledTerm.yearLevel > 4);
-  const extraSemesters = isDelayed ? Math.max(1, totalRegularTermsScheduled - 8) : 0;
+  const isDelayed = totalRegularTermsCount > 8 || (lastScheduledTerm && lastScheduledTerm.yearLevel > 4);
+  const extraSemesters = isDelayed ? Math.max(1, totalRegularTermsCount - 8) : 0;
 
-  const gradSemLabel = lastScheduledTerm ? lastScheduledTerm.label : 'Year 4 • 2nd Semester';
+  const gradSemLabel = lastScheduledTerm ? lastScheduledTerm.label : 'Year 4 • 1st Semester';
 
   return {
     program,

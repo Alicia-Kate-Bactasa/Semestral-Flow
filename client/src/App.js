@@ -87,14 +87,31 @@ export default function App() {
     setHasChosenSemCount(false);
   };
 
-  // Step 2 Sub-step A: Sem Count Select (Initializes EMPTY historical terms by default)
+  // Helper: Get standard courses for a given termIndex (1-indexed)
+  const getStandardCoursesForTerm = (termIdx) => {
+    const termYear = Math.ceil(termIdx / 3);
+    const termLabel = TERM_NAMES[termIdx - 1] || '';
+
+    return catalog.filter((c) => {
+      const matchesYear = c.yearLevel === termYear;
+      const matchesSem = termLabel.includes(c.semester);
+      return matchesYear && matchesSem;
+    }).map(c => ({
+      code: c.code,
+      title: c.title,
+      units: c.units,
+      status: 'passed'
+    }));
+  };
+
+  // Step 2 Sub-step A: Sem Count Select (Pre-populates past terms with standard curriculum as Passed by default!)
   const handleSelectSemesters = (count) => {
     setSemestersCount(count);
     setAuditTermIndex(0);
 
     const initialRecords = {};
     for (let t = 1; t <= count; t++) {
-      initialRecords[t] = [];
+      initialRecords[t] = getStandardCoursesForTerm(t);
     }
 
     setHistoricalRecords(initialRecords);
@@ -104,22 +121,7 @@ export default function App() {
   // Quick Action: Pre-fill & Pass all standard courses for a term
   const handlePassAllStandardCourses = (termIdx) => {
     const termKey = termIdx + 1;
-    const termYear = Math.ceil(termKey / 3);
-    const termLabel = TERM_NAMES[termIdx] || '';
-
-    const stdCourses = catalog.filter((c) => {
-      const matchesYear = c.yearLevel === termYear;
-      const matchesSem = termLabel.includes(c.semester);
-      return matchesYear && matchesSem;
-    });
-
-    const populated = stdCourses.map(c => ({
-      code: c.code,
-      title: c.title,
-      units: c.units,
-      status: 'passed'
-    }));
-
+    const populated = getStandardCoursesForTerm(termKey);
     setHistoricalRecords({ ...historicalRecords, [termKey]: populated });
   };
 
@@ -409,7 +411,7 @@ export default function App() {
                 </div>
 
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Select and mark what you <strong>actually took and passed/failed</strong> in this semester:
+                  Pre-populated with standard courses. Mark what you <strong>actually passed or failed</strong>, or add/remove courses:
                 </p>
 
                 <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
