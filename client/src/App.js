@@ -253,10 +253,23 @@ export default function App() {
   const currentTermLabel = TERM_NAMES[auditTermIndex] || `Term ${currentTermKey}`;
   const activeTermCourses = historicalRecords[currentTermKey] || [];
 
-  const filteredCatalogToAdd = catalog.filter(c => 
-    c.code.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    c.title.toLowerCase().includes(searchQuery.toLowerCase())
+  // Master Set of ALL course codes already selected across ALL historical terms
+  const allAlreadySelectedCodes = new Set(
+    Object.values(historicalRecords)
+      .flat()
+      .map(course => course.code)
   );
+
+  // Filter catalog to HIDE courses that have ALREADY been selected in past terms or current term!
+  const filteredCatalogToAdd = catalog.filter(c => {
+    if (allAlreadySelectedCodes.has(c.code)) return false; // Exclude already selected courses!
+
+    const matchesSearch = 
+      c.code.toLowerCase().includes(searchQuery.toLowerCase()) || 
+      c.title.toLowerCase().includes(searchQuery.toLowerCase());
+
+    return matchesSearch;
+  });
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-center items-center p-4 sm:p-6 transition-colors duration-200">
@@ -724,44 +737,50 @@ export default function App() {
               />
             </div>
 
-            {/* Course checklist grid */}
+            {/* Course checklist grid (hides already selected courses!) */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1 overflow-y-auto pr-1">
-              {filteredCatalogToAdd.map((course) => {
-                const isSelected = selectedModalCourses.some(c => c.code === course.code);
+              {filteredCatalogToAdd.length === 0 ? (
+                <div className="col-span-2 p-8 text-center text-xs text-slate-400 font-medium">
+                  No unselected courses matching your search query. All available courses for this selection may already be added!
+                </div>
+              ) : (
+                filteredCatalogToAdd.map((course) => {
+                  const isSelected = selectedModalCourses.some(c => c.code === course.code);
 
-                return (
-                  <div
-                    key={course.code}
-                    onClick={() => toggleModalCourseSelection(course)}
-                    className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
-                      isSelected
-                        ? 'bg-brand-50 dark:bg-brand-950/40 border-brand-500 ring-1 ring-brand-500'
-                        : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border-slate-200 dark:border-slate-700'
-                    }`}
-                  >
-                    <div className="flex items-center space-x-3 min-w-0 pr-2">
-                      <div className={`w-5 h-5 rounded-lg flex items-center justify-center border transition-colors shrink-0 ${
-                        isSelected ? 'bg-brand-500 border-brand-500 text-white' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700'
-                      }`}>
-                        {isSelected && <CheckCircle2 className="w-3.5 h-3.5" />}
+                  return (
+                    <div
+                      key={course.code}
+                      onClick={() => toggleModalCourseSelection(course)}
+                      className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
+                        isSelected
+                          ? 'bg-brand-50 dark:bg-brand-950/40 border-brand-500 ring-1 ring-brand-500'
+                          : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border-slate-200 dark:border-slate-700'
+                      }`}
+                    >
+                      <div className="flex items-center space-x-3 min-w-0 pr-2">
+                        <div className={`w-5 h-5 rounded-lg flex items-center justify-center border transition-colors shrink-0 ${
+                          isSelected ? 'bg-brand-500 border-brand-500 text-white' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700'
+                        }`}>
+                          {isSelected && <CheckCircle2 className="w-3.5 h-3.5" />}
+                        </div>
+
+                        <div className="min-w-0">
+                          <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white block truncate">
+                            {course.code} ({course.units}u)
+                          </span>
+                          <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
+                            {course.title}
+                          </span>
+                        </div>
                       </div>
 
-                      <div className="min-w-0">
-                        <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white block truncate">
-                          {course.code} ({course.units}u)
-                        </span>
-                        <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
-                          {course.title}
-                        </span>
-                      </div>
+                      <span className="text-xs font-bold text-slate-400 shrink-0">
+                        Y{course.yearLevel} • {course.semester} Sem
+                      </span>
                     </div>
-
-                    <span className="text-xs font-bold text-slate-400 shrink-0">
-                      Y{course.yearLevel} • {course.semester} Sem
-                    </span>
-                  </div>
-                );
-              })}
+                  );
+                })
+              )}
             </div>
 
             {/* Batch Add Footer */}
