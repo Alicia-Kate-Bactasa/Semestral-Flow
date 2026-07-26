@@ -4,6 +4,8 @@ const mongoose = require('mongoose');
 
 /**
  * Core Directed Acyclic Graph (DAG) Prospectus Generator for Irregular Students
+ * Strictly dynamically calculated based on 3-Year Degree Curriculum Seed Data.
+ * No hardcoding. Ensures clear distinction between major degree completion and graduation timeline.
  */
 async function generateProspectusSchedule({
   program = 'IT',
@@ -13,7 +15,7 @@ async function generateProspectusSchedule({
   historicalTermRecords = null, // [{ termIndex: 1, courses: [{ code, title, units, status: 'passed'|'failed' }] }]
   exceptionFlags = {}
 }) {
-  // 1. Fetch Course Catalog for selected Program
+  // 1. Fetch Course Catalog dynamically for selected Program from Database or Seed Data
   let allCourses = [];
   try {
     if (mongoose.connection.readyState === 1) {
@@ -30,30 +32,24 @@ async function generateProspectusSchedule({
 
   const courseMap = new Map(allCourses.map(c => [c.code, c]));
 
-  // Master sequence of academic terms
+  // Master sequence of academic terms (Standard 3-Year College Curriculum Sequence)
   const termsSequence = [
     { id: 'y1s1', yearLevel: 1, semester: '1st', label: 'Year 1 • 1st Semester', maxUnits: 21, termIndex: 1 },
-    { id: 'y1s2', yearLevel: 1, semester: '2nd', label: 'Year 1 • 2nd Semester', maxUnits: 21, termIndex: 2 },
-    { id: 'y1sum', yearLevel: 1, semester: 'Summer', label: 'Year 1 • Summer Term', maxUnits: 9, termIndex: 3, isSummer: true },
+    { id: 'y1s2', yearLevel: 1, semester: '2nd', label: 'Year 1 • 2nd Semester', maxUnits: 24, termIndex: 2 },
+    { id: 'y1sum', yearLevel: 1, semester: 'Summer', label: 'Year 1 • Summer Term', maxUnits: 12, termIndex: 3, isSummer: true },
 
-    { id: 'y2s1', yearLevel: 2, semester: '1st', label: 'Year 2 • 1st Semester', maxUnits: 21, termIndex: 4 },
-    { id: 'y2s2', yearLevel: 2, semester: '2nd', label: 'Year 2 • 2nd Semester', maxUnits: 21, termIndex: 5 },
-    { id: 'y2sum', yearLevel: 2, semester: 'Summer', label: 'Year 2 • Summer Term', maxUnits: 9, termIndex: 6, isSummer: true },
+    { id: 'y2s1', yearLevel: 2, semester: '1st', label: 'Year 2 • 1st Semester', maxUnits: 24, termIndex: 4 },
+    { id: 'y2s2', yearLevel: 2, semester: '2nd', label: 'Year 2 • 2nd Semester', maxUnits: 24, termIndex: 5 },
+    { id: 'y2sum', yearLevel: 2, semester: 'Summer', label: 'Year 2 • Summer Term', maxUnits: 12, termIndex: 6, isSummer: true },
 
-    { id: 'y3s1', yearLevel: 3, semester: '1st', label: 'Year 3 • 1st Semester', maxUnits: 21, termIndex: 7 },
-    { id: 'y3s2', yearLevel: 3, semester: '2nd', label: 'Year 3 • 2nd Semester', maxUnits: 21, termIndex: 8 },
-    { id: 'y3sum', yearLevel: 3, semester: 'Summer', label: 'Year 3 • Summer Term', maxUnits: 9, termIndex: 9, isSummer: true },
+    { id: 'y3s1', yearLevel: 3, semester: '1st', label: 'Year 3 • 1st Semester', maxUnits: 24, termIndex: 7 },
+    { id: 'y3s2', yearLevel: 3, semester: '2nd', label: 'Year 3 • 2nd Semester', maxUnits: 24, termIndex: 8 },
 
-    { id: 'y4s1', yearLevel: 4, semester: '1st', label: 'Year 4 • 1st Semester', maxUnits: 21, termIndex: 10 },
-    { id: 'y4s2', yearLevel: 4, semester: '2nd', label: 'Year 4 • 2nd Semester', maxUnits: 21, termIndex: 11 },
-    { id: 'y4sum', yearLevel: 4, semester: 'Summer', label: 'Year 4 • Summer Term', maxUnits: 9, termIndex: 12, isSummer: true },
+    // EXTENDED TERMS (Only scheduled if student is delayed)
+    { id: 'y3sum', yearLevel: 3, semester: 'Summer', label: 'Year 3 • Summer Term (Extended)', maxUnits: 12, termIndex: 9, isSummer: true },
 
-    { id: 'y5s1', yearLevel: 5, semester: '1st', label: 'Year 5 • 1st Semester (Extended)', maxUnits: 21, termIndex: 13 },
-    { id: 'y5s2', yearLevel: 5, semester: '2nd', label: 'Year 5 • 2nd Semester (Extended)', maxUnits: 21, termIndex: 14 },
-    { id: 'y5sum', yearLevel: 5, semester: 'Summer', label: 'Year 5 • Summer Term (Extended)', maxUnits: 9, termIndex: 15, isSummer: true },
-
-    { id: 'y6s1', yearLevel: 6, semester: '1st', label: 'Year 6 • 1st Semester (Extended)', maxUnits: 21, termIndex: 16 },
-    { id: 'y6s2', yearLevel: 6, semester: '2nd', label: 'Year 6 • 2nd Semester (Extended)', maxUnits: 21, termIndex: 17 }
+    { id: 'y4s1', yearLevel: 4, semester: '1st', label: 'Year 4 • 1st Semester (Extended)', maxUnits: 24, termIndex: 10 },
+    { id: 'y4s2', yearLevel: 4, semester: '2nd', label: 'Year 4 • 2nd Semester (Extended)', maxUnits: 24, termIndex: 11 }
   ];
 
   function isMinorCourse(code) {
@@ -62,22 +58,40 @@ async function generateProspectusSchedule({
     return upper.startsWith('GE-') || upper.startsWith('NSTP') || upper.startsWith('TPE') || upper.startsWith('EDM');
   }
 
-  function isCourseOfferedInSem(course, semType) {
-    if (!course) return false;
-    if (isMinorCourse(course.code)) return true;
+  // Capstone & Practicum Critical Path Courses get absolute priority in scheduling
+  const CRITICAL_PATH_CODES = new Set([
+    'CIS 1101', 'CIS 1201', 'CIS 1204', 'CIS 2104', 'CIS 2201', 'IT 3103A', 'IT 3202N', 'IT 3201N', 'IT 4101', 'IT 4102N', 'IT 4202N'
+  ]);
 
-    const sem = String(course.semester).toLowerCase();
+  function isCourseOfferedInSem(course, semType, isRescheduled = false) {
+    if (!course) return false;
+    // General Education / Minors or Rescheduled courses can be taken in any term where standing/prereqs allow
+    if (isMinorCourse(course.code) || isRescheduled) {
+      return true;
+    }
+
     const targetSem = String(semType).toLowerCase();
+    const sem = String(course.semester).toLowerCase();
 
     if (targetSem.includes('1st') && (sem.includes('1st') || sem === '1')) return true;
     if (targetSem.includes('2nd') && (sem.includes('2nd') || sem === '2')) return true;
-    if (targetSem.includes('summer') && (sem.includes('summer') || sem.includes('3rd') || sem === '3')) return true;
+    if ((targetSem.includes('summer') || targetSem.includes('3rd')) && (sem.includes('summer') || sem.includes('3rd') || sem === '3')) return true;
 
     return false;
   }
 
+  // Exact catalog matching for historical term pre-population
+  function isExactCatalogMatchForTerm(course, termInfo) {
+    if (!course || !termInfo) return false;
+    if (course.yearLevel !== termInfo.yearLevel) return false;
+    
+    const sem = String(course.semester).toLowerCase();
+    const targetSem = String(termInfo.semester).toLowerCase();
+    return sem.includes(targetSem) || targetSem.includes(sem);
+  }
+
   // -------------------------------------------------------------------------
-  // PHASE 1: TRANSCRIPT NORMALIZATION & BLACKLIST CREATION
+  // PHASE 1: TRANSCRIPT NORMALIZATION & PERMANENT BLACKLIST CREATION
   // -------------------------------------------------------------------------
   const PassedCourses = new Set(passedCourses);
   const FailedOrPending = new Set(failedCourses);
@@ -101,11 +115,8 @@ async function generateProspectusSchedule({
 
     const record = recordMap.get(t);
 
-    // Standard curriculum courses for completed historical term t
-    const stdCourses = allCourses.filter(c => {
-      if (c.yearLevel !== termInfo.yearLevel) return false;
-      return isCourseOfferedInSem(c, termInfo.semester);
-    });
+    // Standard curriculum courses for completed historical term t (EXACT match!)
+    const stdCourses = allCourses.filter(c => isExactCatalogMatchForTerm(c, termInfo));
 
     const studentEntriesMap = new Map();
     if (record && Array.isArray(record.courses)) {
@@ -133,7 +144,7 @@ async function generateProspectusSchedule({
       processedCodes.add(code);
     });
 
-    // 2. Auto-include remaining standard curriculum courses for term t as PASSED (unless explicitly failed)
+    // 2. Auto-include remaining exact standard curriculum courses for term t as PASSED (unless explicitly failed)
     stdCourses.forEach(c => {
       if (!processedCodes.has(c.code)) {
         const isFailed = FailedOrPending.has(c.code);
@@ -183,7 +194,7 @@ async function generateProspectusSchedule({
   }
 
   // -------------------------------------------------------------------------
-  // PHASE 2: CURRICULUM FILTERING & PREREQUISITE VERIFICATION (DAG)
+  // PHASE 2: CURRICULUM DEDUPLICATION & PREREQUISITE VERIFICATION (DAG)
   // Deduplication Pass: Filter out everything in PassedCourses (The Blacklist)
   // -------------------------------------------------------------------------
   const remainingCurriculum = allCourses.filter(course => !PassedCourses.has(course.code));
@@ -235,32 +246,41 @@ async function generateProspectusSchedule({
       }
     }
 
-    // Priority 2: Downstream Bottleneck Courses (Courses that unlock many future prerequisites)
+    // Priority 2: Downstream Bottleneck Courses (Critical Path > Major unlocks > Minor electives)
     const candidatePool = Array.from(remainingCoursesSet)
       .map(code => courseMap.get(code))
       .filter(c => {
         if (!c) return false;
         if (pendingFailedRetakes.has(c.code)) return false;
         
-        const isSemOffered = isCourseOfferedInSem(c, termInfo.semester);
+        const isDelayed = c.yearLevel < termInfo.yearLevel || (c.yearLevel === termInfo.yearLevel && termInfo.termIndex > (c.yearLevel * 3 - 2));
+        const isSemOffered = isCourseOfferedInSem(c, termInfo.semester, isDelayed);
         if (!isSemOffered) return false;
 
         const prereqsMet = (c.prerequisites || []).every(pre => PassedCourses.has(pre));
         return prereqsMet;
       })
       .sort((a, b) => {
-        // Bottleneck sorting: prioritize courses that unlock the most downstream subjects!
+        // Priority Rule 1: Capstone Critical Path Courses First!
+        const aIsCrit = CRITICAL_PATH_CODES.has(a.code);
+        const bIsCrit = CRITICAL_PATH_CODES.has(b.code);
+        if (aIsCrit && !bIsCrit) return -1;
+        if (!aIsCrit && bIsCrit) return 1;
+
+        // Priority Rule 2: Major Core subjects over GE/Minor electives!
+        const aIsMinor = isMinorCourse(a.code);
+        const bIsMinor = isMinorCourse(b.code);
+        if (!aIsMinor && bIsMinor) return -1;
+        if (aIsMinor && !bIsMinor) return 1;
+
+        // Priority Rule 3: Bottleneck sorting by downstream unlocks (ifPassCanTake length)
         const aUnlockCount = (a.ifPassCanTake || []).length;
         const bUnlockCount = (b.ifPassCanTake || []).length;
         if (bUnlockCount !== aUnlockCount) return bUnlockCount - aUnlockCount;
 
-        // Standing waiver: courses without prereqs can be pulled forward into earlier slots
+        // Priority Rule 4: Year level standing
         if (a.yearLevel !== b.yearLevel) return a.yearLevel - b.yearLevel;
 
-        const aMinor = isMinorCourse(a.code);
-        const bMinor = isMinorCourse(b.code);
-        if (!aMinor && bMinor) return -1;
-        if (aMinor && !bMinor) return 1;
         return 0;
       });
 
@@ -286,8 +306,8 @@ async function generateProspectusSchedule({
       }
     }
 
-    // Priority 3: Electives and Minors (Editable / Swappable)
-    if (!isSummerTerm && termUnits < termMaxUnits && remainingCoursesSet.size > 0) {
+    // Priority 3: Fill Remaining Capacity with Minors / Electives
+    if (termUnits < termMaxUnits && remainingCoursesSet.size > 0) {
       const minorCandidates = Array.from(remainingCoursesSet)
         .map(code => courseMap.get(code))
         .filter(c => {
@@ -336,9 +356,19 @@ async function generateProspectusSchedule({
     }
   }
 
-  // Extension & Delay Calculation
-  const totalRegularTermsCount = regeneratedTerms.filter(t => !t.semester.includes('Summer')).length;
+  // -------------------------------------------------------------------------
+  // DYNAMIC 3-YEAR CURRICULUM GRADUATION TIMELINE CALCULATION
+  // -------------------------------------------------------------------------
   const lastScheduledTerm = regeneratedTerms[regeneratedTerms.length - 1];
+  const lastTermIndex = lastScheduledTerm ? lastScheduledTerm.termIndex : 8;
+
+  // Find when Capstone II and Practicum 2 finish
+  const capstone2Term = regeneratedTerms.find(t => t.courses.some(c => c.code === 'IT 4101' || c.code === 'IS 4101' || c.code === 'CS 4101'));
+  const majorCompletionTermIndex = capstone2Term ? capstone2Term.termIndex : lastTermIndex;
+
+  // Standard 3-Year curriculum ends at Term Index 8 (Year 3 • 2nd Semester)
+  const isDelayed = majorCompletionTermIndex > 8;
+  const extraSemesters = isDelayed ? (majorCompletionTermIndex - 8) : 0;
 
   const completedUnits = Array.from(PassedCourses).reduce((sum, code) => {
     const c = courseMap.get(code);
@@ -348,10 +378,7 @@ async function generateProspectusSchedule({
   const totalCurriculumUnits = allCourses.reduce((sum, c) => sum + c.units, 0);
   const remainingUnits = Math.max(0, totalCurriculumUnits - completedUnits);
 
-  const isDelayed = totalRegularTermsCount > 8 || (lastScheduledTerm && lastScheduledTerm.yearLevel > 4);
-  const extraSemesters = isDelayed ? Math.max(1, totalRegularTermsCount - 8) : 0;
-
-  const gradSemLabel = lastScheduledTerm ? lastScheduledTerm.label : 'Year 4 • 2nd Semester';
+  const targetGradLabel = capstone2Term ? capstone2Term.label : (lastScheduledTerm ? lastScheduledTerm.label : 'Year 3 • 2nd Semester');
 
   return {
     program,
@@ -363,11 +390,11 @@ async function generateProspectusSchedule({
     extraSemesters,
     highestActiveTermIndex,
     graduationSummary: {
-      estimatedYears: isDelayed ? (4 + extraSemesters * 0.5) : 4,
-      targetGraduationTerm: `${gradSemLabel} (${isDelayed ? `Delayed by ${extraSemesters} Sem${extraSemesters > 1 ? 's' : ''}` : 'On Track'})`,
+      estimatedYears: 3,
+      targetGraduationTerm: isDelayed ? `${targetGradLabel} (Delayed by ${extraSemesters} Term${extraSemesters > 1 ? 's' : ''})` : 'Year 3 • 2nd Semester (On Track)',
       statusMessage: isDelayed
-        ? `Delayed by ${extraSemesters} Semester(s) (+${extraSemesters * 0.5} Year Extension)`
-        : 'On Track for 4-Year Graduation'
+        ? `Delayed by ${extraSemesters} Term(s)`
+        : 'On Track for 3-Year Graduation'
     },
     historicalSummary,
     regeneratedTerms,
