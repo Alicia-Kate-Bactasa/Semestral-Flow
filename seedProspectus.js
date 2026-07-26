@@ -14,9 +14,9 @@ const mongoUri = process.env.MONGODB_URI || (
     : `mongodb://localhost:27017/${dbName}`
 );
 
-// Load private JSON seed datasets
+// Load private JSON seed datasets from single `seedData` directory
 function loadPrivateSeedData() {
-  const seedDir = path.join(__dirname, 'private_data', 'seedData');
+  const seedDir = path.join(__dirname, 'seedData');
   const files = ['it_prospectus.json', 'cs_prospectus.json', 'is_prospectus.json'];
   let allCourses = [];
 
@@ -42,11 +42,9 @@ async function seedDatabase() {
     const seedData = loadPrivateSeedData();
     console.log(`📦 Found ${seedData.length} course nodes across IT, CS, and IS prospectuses.`);
 
-    // Clear existing collection to avoid duplicates during re-seeding
     await Course.deleteMany({});
     console.log('🧹 Cleared existing course dictionary.');
 
-    // Insert seeds
     const inserted = await Course.insertMany(seedData);
     console.log(`🎉 Successfully seeded ${inserted.length} course nodes into MongoDB!`);
 
@@ -58,7 +56,6 @@ async function seedDatabase() {
   }
 }
 
-// Allow running directly: `node seedProspectus.js`
 if (require.main === module) {
   seedDatabase();
 }
