@@ -2,6 +2,7 @@ require('dotenv').config(); // 1. Load hidden credentials from .env first
 
 const express = require('express');
 const { MongoClient, ServerApiVersion } = require('mongodb');
+const path = require('path'); // <-- 1. Require path module
 
 const app = express();
 const PORT = process.env.PORT || 5000;
@@ -34,12 +35,21 @@ async function startServer() {
         // Attach database instance to the app so your routes can use it later
         app.locals.db = client.db(dbName);
 
-        // 4. Test API Route
-        app.get('/', (req, res) => {
-            res.send('Automated Prospectus Generator Backend is Running!');
+        // 4. Test API Route (Keep this for backend checking)
+        app.get('/api/health', (req, res) => {
+            res.json({ status: 'Backend is running!' });
         });
 
-        // 5. Start the Express server
+        // ==========================================
+        // 5. SERVE REACT FRONTEND IN PRODUCTION
+        // ==========================================
+        app.use(express.static(path.join(__dirname, 'client/build')));
+
+        app.get('*', (req, res) => {
+            res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
+        });
+
+        // 6. Start the Express server
         app.listen(PORT, () => {
             console.log(`Backend server is running live on port ${PORT}`);
         });

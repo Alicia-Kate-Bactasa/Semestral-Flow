@@ -5,9 +5,8 @@ node_modules/
 
 # Ignore client frontend node modules
 client/node_modules/
-/client/node_modules/
+
 # dependencies
-/node_modules
 /.pnp
 .pnp.js
 
