@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Check, Sparkles, ArrowRight, RotateCcw, BookOpen, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Search, Check, Sparkles, ArrowRight, RotateCcw, BookOpen, AlertCircle, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
 
 export default function ProspectusProcessor({ user }) {
   const [program, setProgram] = useState(user?.program || 'IT');
@@ -9,6 +9,16 @@ export default function ProspectusProcessor({ user }) {
   const [availableCourses, setAvailableCourses] = useState([]);
   const [scheduleResult, setScheduleResult] = useState(null);
   const [hasGeneratedPlan, setHasGeneratedPlan] = useState(false);
+
+  // Accordion open state for Year Drawers (Default Year 1 open)
+  const [openDrawers, setOpenDrawers] = useState({ 1: true, 2: false, 3: false, 4: false });
+
+  const toggleDrawer = (year) => {
+    setOpenDrawers(prev => ({
+      ...prev,
+      [year]: !prev[year]
+    }));
+  };
 
   // Fetch Course Catalog for selected Program
   useEffect(() => {
@@ -65,19 +75,31 @@ export default function ProspectusProcessor({ user }) {
     }
   };
 
-  // Group catalog courses by Year and Term
-  const groupedCurriculum = availableCourses.reduce((acc, course) => {
-    const key = `Year ${course.yearLevel} • ${course.semester} Semester`;
-    if (!acc[key]) acc[key] = [];
-    acc[key].push(course);
-    return acc;
-  }, {});
-
   // Filter courses for wizard checklist
   const filteredCourses = availableCourses.filter(c => 
     c.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
+
+  // Group catalog courses by Year Level and Semester
+  const coursesByYear = {
+    1: {
+      '1st Semester': availableCourses.filter(c => c.yearLevel === 1 && c.semester === '1st'),
+      '2nd Semester': availableCourses.filter(c => c.yearLevel === 1 && c.semester === '2nd'),
+    },
+    2: {
+      '1st Semester': availableCourses.filter(c => c.yearLevel === 2 && c.semester === '1st'),
+      '2nd Semester': availableCourses.filter(c => c.yearLevel === 2 && c.semester === '2nd'),
+    },
+    3: {
+      '1st Semester': availableCourses.filter(c => c.yearLevel === 3 && c.semester === '1st'),
+      '2nd Semester': availableCourses.filter(c => c.yearLevel === 3 && c.semester === '2nd'),
+    },
+    4: {
+      '1st Semester': availableCourses.filter(c => c.yearLevel === 4 && c.semester === '1st'),
+      '2nd Semester': availableCourses.filter(c => c.yearLevel === 4 && c.semester === '2nd'),
+    }
+  };
 
   return (
     <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
@@ -209,37 +231,109 @@ export default function ProspectusProcessor({ user }) {
         </div>
       )}
 
-      {/* DEFAULT VIEW: STANDARD PROSPECTUS (If wizard not yet run) */}
+      {/* DEFAULT VIEW: YEAR LEVEL COLLAPSIBLE DRAWERS */}
       {!hasGeneratedPlan && (
         <div className="space-y-6">
           <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-slate-900">Full {program} Curriculum Prospectus</h2>
-            <span className="text-xs text-slate-500">Regular 4-Year Schedule</span>
+            <h2 className="text-base font-bold text-slate-900">Full BS {program} Curriculum Prospectus</h2>
+            <span className="text-xs text-slate-500 font-medium">Grouped by Year Level</span>
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-            {Object.keys(groupedCurriculum).map(termTitle => (
-              <div key={termTitle} className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card space-y-3">
-                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
-                  <span className="text-xs font-bold text-slate-900">{termTitle}</span>
-                  <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-3 py-0.5 rounded-full">
-                    {groupedCurriculum[termTitle].reduce((sum, c) => sum + c.units, 0)} Units
-                  </span>
-                </div>
+          <div className="space-y-4">
+            {[1, 2, 3, 4].map(year => {
+              const sem1Courses = coursesByYear[year]['1st Semester'] || [];
+              const sem2Courses = coursesByYear[year]['2nd Semester'] || [];
+              const totalYearUnits = [...sem1Courses, ...sem2Courses].reduce((sum, c) => sum + c.units, 0);
+              const isOpen = !!openDrawers[year];
 
-                <div className="space-y-2">
-                  {groupedCurriculum[termTitle].map(c => (
-                    <div key={c.code} className="p-3 rounded-2xl border border-slate-100 bg-white flex items-center justify-between">
-                      <div>
-                        <span className="font-bold text-xs text-slate-900">{c.code}</span>
-                        <p className="text-xs text-slate-600">{c.title}</p>
+              return (
+                <div key={year} className="bg-white rounded-3xl border border-slate-200/80 shadow-card overflow-hidden transition-all">
+                  
+                  {/* Drawer Accordion Header */}
+                  <div
+                    onClick={() => toggleDrawer(year)}
+                    className="p-6 flex items-center justify-between cursor-pointer hover:bg-slate-50/80 transition-colors"
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center">
+                        Y{year}
                       </div>
-                      <span className="text-xs font-bold text-slate-900">{c.units}u</span>
+                      <div>
+                        <h3 className="text-sm font-bold text-slate-900">Year {year} Prospectus</h3>
+                        <p className="text-xs text-slate-500">
+                          {sem1Courses.length + sem2Courses.length} Subjects • {totalYearUnits} Total Units
+                        </p>
+                      </div>
                     </div>
-                  ))}
+
+                    <div className="flex items-center space-x-3">
+                      <span className="text-xs font-semibold text-brand-600 bg-brand-50 px-3 py-1 rounded-full border border-brand-100 hidden sm:inline">
+                        Year {year} Catalog
+                      </span>
+                      {isOpen ? (
+                        <ChevronUp className="w-5 h-5 text-slate-400" />
+                      ) : (
+                        <ChevronDown className="w-5 h-5 text-slate-400" />
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Drawer Content (Collapsible) */}
+                  {isOpen && (
+                    <div className="p-6 pt-0 border-t border-slate-100 bg-slate-50/40 space-y-6">
+                      
+                      {/* 1st Semester */}
+                      <div className="space-y-3 pt-4">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-700">1st Semester</span>
+                          <span className="text-xs font-medium text-slate-500">
+                            {sem1Courses.reduce((s, c) => s + c.units, 0)} Units
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {sem1Courses.map(c => (
+                            <div key={c.code} className="p-3.5 rounded-2xl border border-slate-200/70 bg-white flex items-center justify-between">
+                              <div>
+                                <span className="font-bold text-xs text-slate-900">{c.code}</span>
+                                <p className="text-xs text-slate-600 font-normal">{c.title}</p>
+                              </div>
+                              <span className="text-xs font-bold text-slate-900 bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200/60">
+                                {c.units}u
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                      {/* 2nd Semester */}
+                      <div className="space-y-3 pt-2">
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs font-bold uppercase tracking-wider text-slate-700">2nd Semester</span>
+                          <span className="text-xs font-medium text-slate-500">
+                            {sem2Courses.reduce((s, c) => s + c.units, 0)} Units
+                          </span>
+                        </div>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                          {sem2Courses.map(c => (
+                            <div key={c.code} className="p-3.5 rounded-2xl border border-slate-200/70 bg-white flex items-center justify-between">
+                              <div>
+                                <span className="font-bold text-xs text-slate-900">{c.code}</span>
+                                <p className="text-xs text-slate-600 font-normal">{c.title}</p>
+                              </div>
+                              <span className="text-xs font-bold text-slate-900 bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200/60">
+                                {c.units}u
+                              </span>
+                            </div>
+                          ))}
+                        </div>
+                      </div>
+
+                    </div>
+                  )}
+
                 </div>
-              </div>
-            ))}
+              );
+            })}
           </div>
         </div>
       )}
