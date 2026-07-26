@@ -44,18 +44,22 @@ app.get('/api/health', (req, res) => {
   });
 });
 
-// Mount Routes
+// Mount API Routes
 app.use('/api/auth', authRoutes);
 app.use('/api/petitions', petitionRoutes);
 app.use('/api', prospectusRoutes);
 
 // Serve Static React Frontend Production Build
-if (process.env.NODE_ENV === 'production' || require('fs').existsSync(path.join(__dirname, 'client/build'))) {
-  app.use(express.static(path.join(__dirname, 'client/build')));
-  app.get(/^(?!\/api).+/, (req, res) => {
-    res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
-  });
-}
+const clientBuildPath = path.join(__dirname, 'client', 'build');
+app.use(express.static(clientBuildPath));
+
+// Catch-all route to serve React index.html for root path '/' and all non-API paths
+app.get('*', (req, res, next) => {
+  if (req.path.startsWith('/api')) {
+    return next();
+  }
+  res.sendFile(path.join(clientBuildPath, 'index.html'));
+});
 
 // Start Server
 app.listen(PORT, () => {
