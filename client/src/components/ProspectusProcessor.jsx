@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Check, Sparkles, ArrowRight, RotateCcw, BookOpen, AlertCircle, CheckCircle2, ChevronDown, ChevronUp } from 'lucide-react';
+import { Search, Check, Sparkles, ArrowRight, RotateCcw, BookOpen, AlertCircle, CheckCircle2 } from 'lucide-react';
 
 export default function ProspectusProcessor({ user }) {
   const [program, setProgram] = useState(user?.program || 'IT');
@@ -10,15 +10,8 @@ export default function ProspectusProcessor({ user }) {
   const [scheduleResult, setScheduleResult] = useState(null);
   const [hasGeneratedPlan, setHasGeneratedPlan] = useState(false);
 
-  // Accordion open state for Year Drawers (Default Year 1 open)
-  const [openDrawers, setOpenDrawers] = useState({ 1: true, 2: false, 3: false, 4: false });
-
-  const toggleDrawer = (year) => {
-    setOpenDrawers(prev => ({
-      ...prev,
-      [year]: !prev[year]
-    }));
-  };
+  // Active Year Level tab (Default Year 1 selected)
+  const [activeYearTab, setActiveYearTab] = useState(1);
 
   // Fetch Course Catalog for selected Program
   useEffect(() => {
@@ -101,8 +94,10 @@ export default function ProspectusProcessor({ user }) {
     }
   };
 
+  const currentYearData = coursesByYear[activeYearTab] || { '1st Semester': [], '2nd Semester': [] };
+
   return (
-    <div className="max-w-5xl mx-auto px-4 sm:px-6 lg:px-8 py-10 space-y-10">
+    <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       
       {/* Friendly Welcome Hero Banner */}
       <div className="bg-white rounded-3xl border border-slate-200/80 p-8 text-center space-y-4 shadow-card">
@@ -197,7 +192,7 @@ export default function ProspectusProcessor({ user }) {
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
               <span className="text-xs font-bold text-slate-900">Recommended Subjects to Take Next</span>
               <span className="text-xs font-bold text-brand-600 bg-brand-50 px-3 py-1 rounded-full border border-brand-100">
-                Total: {scheduleResult?.totalScheduledUnits || 0} Units
+                Total: {(scheduleResult?.totalScheduledUnits || 0).toFixed(1)} Units
               </span>
             </div>
 
@@ -220,8 +215,8 @@ export default function ProspectusProcessor({ user }) {
                     <p className="text-xs text-slate-600">{course.title}</p>
                   </div>
 
-                  <span className="text-xs font-bold text-slate-900 bg-slate-50 px-3 py-1 rounded-full border border-slate-200/60">
-                    {course.units} Units
+                  <span className="text-[11px] font-semibold text-slate-500 bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200/60">
+                    {Number(course.units).toFixed(1)}
                   </span>
                 </div>
               ))}
@@ -231,110 +226,96 @@ export default function ProspectusProcessor({ user }) {
         </div>
       )}
 
-      {/* DEFAULT VIEW: YEAR LEVEL COLLAPSIBLE DRAWERS */}
+      {/* SINGLE VIEW HORIZONTAL SLIDING TABS / PROSPECTUS */}
       {!hasGeneratedPlan && (
         <div className="space-y-6">
-          <div className="flex items-center justify-between">
-            <h2 className="text-base font-bold text-slate-900">Full BS {program} Curriculum Prospectus</h2>
-            <span className="text-xs text-slate-500 font-medium">Grouped by Year Level</span>
+          
+          {/* Header & Year Level Sliding Drawer Tabs */}
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4 bg-white p-4 rounded-3xl border border-slate-200/80 shadow-card">
+            <div>
+              <h2 className="text-base font-bold text-slate-900">Full BS {program} Prospectus</h2>
+              <p className="text-xs text-slate-500">Select year level to view both semesters in single view</p>
+            </div>
+
+            {/* Circular Year Level Drawer Tabs */}
+            <div className="flex bg-slate-100 p-1 rounded-full border border-slate-200/60 self-start sm:self-auto">
+              {[1, 2, 3, 4].map(year => (
+                <button
+                  key={year}
+                  onClick={() => setActiveYearTab(year)}
+                  className={`px-4 py-1.5 text-xs font-bold rounded-full transition-all ${
+                    activeYearTab === year
+                      ? 'bg-slate-900 text-white shadow-subtle'
+                      : 'text-slate-600 hover:text-slate-900'
+                  }`}
+                >
+                  Year {year}
+                </button>
+              ))}
+            </div>
           </div>
 
-          <div className="space-y-4">
-            {[1, 2, 3, 4].map(year => {
-              const sem1Courses = coursesByYear[year]['1st Semester'] || [];
-              const sem2Courses = coursesByYear[year]['2nd Semester'] || [];
-              const totalYearUnits = [...sem1Courses, ...sem2Courses].reduce((sum, c) => sum + c.units, 0);
-              const isOpen = !!openDrawers[year];
+          {/* SINGLE VIEW GRID: 1st Semester & 2nd Semester Side-by-Side */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fadeIn">
+            
+            {/* 1st Semester Card */}
+            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-900">Year {activeYearTab} • 1st Semester</span>
+                <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                  {currentYearData['1st Semester'].reduce((sum, c) => sum + c.units, 0).toFixed(1)} Total Units
+                </span>
+              </div>
 
-              return (
-                <div key={year} className="bg-white rounded-3xl border border-slate-200/80 shadow-card overflow-hidden transition-all">
-                  
-                  {/* Drawer Accordion Header */}
-                  <div
-                    onClick={() => toggleDrawer(year)}
-                    className="p-6 flex items-center justify-between cursor-pointer hover:bg-slate-50/80 transition-colors"
-                  >
-                    <div className="flex items-center space-x-3">
-                      <div className="w-8 h-8 rounded-full bg-slate-100 text-slate-700 font-bold text-xs flex items-center justify-center">
-                        Y{year}
-                      </div>
+              <div className="space-y-2.5">
+                {currentYearData['1st Semester'].length === 0 ? (
+                  <p className="text-center py-6 text-slate-400 text-xs">No courses cataloged.</p>
+                ) : (
+                  currentYearData['1st Semester'].map(c => (
+                    <div key={c.code} className="p-3.5 rounded-2xl border border-slate-100 bg-white flex items-center justify-between hover:border-slate-200 transition-colors">
                       <div>
-                        <h3 className="text-sm font-bold text-slate-900">Year {year} Prospectus</h3>
-                        <p className="text-xs text-slate-500">
-                          {sem1Courses.length + sem2Courses.length} Subjects • {totalYearUnits} Total Units
-                        </p>
+                        <span className="font-bold text-xs text-slate-900">{c.code}</span>
+                        <p className="text-xs text-slate-600 font-normal">{c.title}</p>
                       </div>
-                    </div>
-
-                    <div className="flex items-center space-x-3">
-                      <span className="text-xs font-semibold text-brand-600 bg-brand-50 px-3 py-1 rounded-full border border-brand-100 hidden sm:inline">
-                        Year {year} Catalog
+                      <span className="text-[11px] font-semibold text-slate-500 bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200/60">
+                        {Number(c.units).toFixed(1)}
                       </span>
-                      {isOpen ? (
-                        <ChevronUp className="w-5 h-5 text-slate-400" />
-                      ) : (
-                        <ChevronDown className="w-5 h-5 text-slate-400" />
-                      )}
                     </div>
-                  </div>
+                  ))
+                )}
+              </div>
+            </div>
 
-                  {/* Drawer Content (Collapsible) */}
-                  {isOpen && (
-                    <div className="p-6 pt-0 border-t border-slate-100 bg-slate-50/40 space-y-6">
-                      
-                      {/* 1st Semester */}
-                      <div className="space-y-3 pt-4">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold uppercase tracking-wider text-slate-700">1st Semester</span>
-                          <span className="text-xs font-medium text-slate-500">
-                            {sem1Courses.reduce((s, c) => s + c.units, 0)} Units
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {sem1Courses.map(c => (
-                            <div key={c.code} className="p-3.5 rounded-2xl border border-slate-200/70 bg-white flex items-center justify-between">
-                              <div>
-                                <span className="font-bold text-xs text-slate-900">{c.code}</span>
-                                <p className="text-xs text-slate-600 font-normal">{c.title}</p>
-                              </div>
-                              <span className="text-xs font-bold text-slate-900 bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200/60">
-                                {c.units}u
-                              </span>
-                            </div>
-                          ))}
-                        </div>
+            {/* 2nd Semester Card */}
+            <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+                <span className="text-xs font-bold uppercase tracking-wider text-slate-900">Year {activeYearTab} • 2nd Semester</span>
+                <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                  {currentYearData['2nd Semester'].reduce((sum, c) => sum + c.units, 0).toFixed(1)} Total Units
+                </span>
+              </div>
+
+              <div className="space-y-2.5">
+                {currentYearData['2nd Semester'].length === 0 ? (
+                  <p className="text-center py-6 text-slate-400 text-xs">No courses cataloged.</p>
+                ) : (
+                  currentYearData['2nd Semester'].map(c => (
+                    <div key={c.code} className="p-3.5 rounded-2xl border border-slate-100 bg-white flex items-center justify-between hover:border-slate-200 transition-colors">
+                      <div>
+                        <span className="font-bold text-xs text-slate-900">{c.code}</span>
+                        <p className="text-xs text-slate-600 font-normal">{c.title}</p>
                       </div>
-
-                      {/* 2nd Semester */}
-                      <div className="space-y-3 pt-2">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold uppercase tracking-wider text-slate-700">2nd Semester</span>
-                          <span className="text-xs font-medium text-slate-500">
-                            {sem2Courses.reduce((s, c) => s + c.units, 0)} Units
-                          </span>
-                        </div>
-                        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-                          {sem2Courses.map(c => (
-                            <div key={c.code} className="p-3.5 rounded-2xl border border-slate-200/70 bg-white flex items-center justify-between">
-                              <div>
-                                <span className="font-bold text-xs text-slate-900">{c.code}</span>
-                                <p className="text-xs text-slate-600 font-normal">{c.title}</p>
-                              </div>
-                              <span className="text-xs font-bold text-slate-900 bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200/60">
-                                {c.units}u
-                              </span>
-                            </div>
-                          ))}
-                        </div>
-                      </div>
-
+                      <span className="text-[11px] font-semibold text-slate-500 bg-slate-50 px-2.5 py-0.5 rounded-full border border-slate-200/60">
+                        {Number(c.units).toFixed(1)}
+                      </span>
                     </div>
-                  )}
+                  ))
+                )}
+              </div>
+            </div>
 
-                </div>
-              );
-            })}
           </div>
+
         </div>
       )}
 
@@ -416,8 +397,8 @@ export default function ProspectusProcessor({ user }) {
                       </div>
                     </div>
 
-                    <span className="text-[10px] text-slate-400 bg-slate-100 px-2.5 py-0.5 rounded-full">
-                      Year {c.yearLevel}
+                    <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
+                      {Number(c.units).toFixed(1)}
                     </span>
                   </div>
                 );
