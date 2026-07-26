@@ -85,7 +85,7 @@ async function generateProspectusSchedule({
   const regeneratedTerms = [];
   const historicalSummary = [];
 
-  // Build term lookup
+  // Build term lookup map
   const recordMap = new Map();
   if (Array.isArray(historicalTermRecords)) {
     historicalTermRecords.forEach(r => recordMap.set(r.termIndex, r));
@@ -100,39 +100,56 @@ async function generateProspectusSchedule({
     };
 
     const record = recordMap.get(t);
-    let termCourseEntries = [];
 
-    if (record && Array.isArray(record.courses) && record.courses.length > 0) {
-      termCourseEntries = record.courses.map(entry => {
-        const course = courseMap.get(entry.code) || {
-          code: entry.code,
-          title: entry.title || entry.code,
-          units: entry.units || 3,
-          yearLevel: termInfo.yearLevel,
-          semester: termInfo.semester,
-          prerequisites: []
-        };
-        const isPassed = entry.status === 'passed';
-        const isFailed = entry.status === 'failed';
-        return { course, isPassed, isFailed };
-      });
-    } else {
-      // Auto-populate standard curriculum for unedited historical term
-      const stdCourses = allCourses.filter(c => {
-        if (c.yearLevel !== termInfo.yearLevel) return false;
-        return isCourseOfferedInSem(c, termInfo.semester);
-      });
-      termCourseEntries = stdCourses.map(c => ({
-        course: c,
-        isPassed: !FailedOrPending.has(c.code),
-        isFailed: FailedOrPending.has(c.code)
-      }));
+    // Standard curriculum courses for completed historical term t
+    const stdCourses = allCourses.filter(c => {
+      if (c.yearLevel !== termInfo.yearLevel) return false;
+      return isCourseOfferedInSem(c, termInfo.semester);
+    });
+
+    const studentEntriesMap = new Map();
+    if (record && Array.isArray(record.courses)) {
+      record.courses.forEach(e => studentEntriesMap.set(e.code, e));
     }
+
+    const termCourseEntries = [];
+    const processedCodes = new Set();
+
+    // 1. Process student explicit audit entries
+    studentEntriesMap.forEach((entry, code) => {
+      const course = courseMap.get(code) || {
+        code,
+        title: entry.title || code,
+        units: entry.units || 3,
+        yearLevel: termInfo.yearLevel,
+        semester: termInfo.semester,
+        prerequisites: []
+      };
+
+      const isFailed = entry.status === 'failed';
+      const isPassed = entry.status === 'passed' || (!isFailed && entry.status !== 'unspecified');
+
+      termCourseEntries.push({ course, isPassed, isFailed });
+      processedCodes.add(code);
+    });
+
+    // 2. Auto-include remaining standard curriculum courses for term t as PASSED (unless explicitly failed)
+    stdCourses.forEach(c => {
+      if (!processedCodes.has(c.code)) {
+        const isFailed = FailedOrPending.has(c.code);
+        termCourseEntries.push({
+          course: c,
+          isPassed: !isFailed,
+          isFailed
+        });
+        processedCodes.add(c.code);
+      }
+    });
 
     const termCourses = termCourseEntries.map(({ course, isPassed, isFailed }) => {
       if (isPassed) {
         PassedCourses.add(course.code);
-        FailedOrPending.delete(course.code);
+        FailedOrPending.delete(course.code); // Un-fail if passed in any historical term!
       } else if (isFailed) {
         if (!PassedCourses.has(course.code)) {
           FailedOrPending.add(course.code);
