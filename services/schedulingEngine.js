@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
 
 /**
  * Core Directed Acyclic Graph (DAG) Prospectus Generator
- * Retakes of failed subjects occur AFTER the term they were failed.
+ * Retakes of failed subjects occur in subsequent terms.
  * Displaced major slots are replaced with eligible Minors/GEs, and dependent major chains shift cleanly.
  */
 async function generateProspectusSchedule({
@@ -94,10 +94,10 @@ async function generateProspectusSchedule({
       const course = courseMap.get(failedCode);
       if (!course) continue;
 
-      // Retake can only happen in a term AFTER the course's original year/semester
       const canRetakeThisTerm = isTermAfter(course.yearLevel, course.semester, termInfo.yearLevel, termInfo.semester);
 
       if (canRetakeThisTerm) {
+        // Prerequisites MUST ALREADY BE COMPLETED in a previous term (currentCompleted)
         const prereqsMet = (course.prerequisites || []).every(pre => currentCompleted.has(pre));
         if (prereqsMet && (termUnits + course.units <= termMaxUnits)) {
           termUnits += course.units;
@@ -117,20 +117,22 @@ async function generateProspectusSchedule({
     }
 
     // -----------------------------------------------------------------------
-    // STEP 2: Regular Curriculum Subjects (Prerequisites Met)
+    // STEP 2: Regular Curriculum Subjects (EXCLUDING FAILED SUBJECTS)
     // -----------------------------------------------------------------------
     if (!isSummerTerm) {
       const regularTermCandidates = Array.from(remainingCourses)
         .map(code => courseMap.get(code))
         .filter(c => {
           if (!c) return false;
-          // Only schedule courses whose original term is at or before current term
+          // Failed courses can NEVER be scheduled as regular courses!
+          if (failedSet.has(c.code)) return false;
           return !isTermAfter(c.yearLevel, c.semester, termInfo.yearLevel, termInfo.semester);
         });
 
       for (const course of regularTermCandidates) {
         if (!remainingCourses.has(course.code)) continue;
         
+        // Prerequisites must strictly be completed in a PREVIOUS term!
         const prereqsMet = (course.prerequisites || []).every(pre => currentCompleted.has(pre));
         if (prereqsMet && (termUnits + course.units <= termMaxUnits)) {
           const isDelayed = isTermAfter(course.yearLevel, course.semester, termInfo.yearLevel, termInfo.semester) || course.yearLevel < termInfo.yearLevel;
@@ -152,7 +154,11 @@ async function generateProspectusSchedule({
       // Summer Term: Only schedule explicit Summer subjects or small retakes (max 9u)
       const summerCandidates = Array.from(remainingCourses)
         .map(code => courseMap.get(code))
-        .filter(c => c && (c.semester === 'Summer' || c.semester === '3rd' || c.semester === '3') && c.yearLevel <= termInfo.yearLevel);
+        .filter(c => {
+          if (!c) return false;
+          if (failedSet.has(c.code)) return false;
+          return (c.semester === 'Summer' || c.semester === '3rd' || c.semester === '3') && c.yearLevel <= termInfo.yearLevel;
+        });
 
       for (const course of summerCandidates) {
         if (!remainingCourses.has(course.code)) continue;
@@ -176,19 +182,17 @@ async function generateProspectusSchedule({
     // -----------------------------------------------------------------------
     // STEP 3: Slot Replacements (Pull Forward Minors / GEs into Freed Slots)
     // -----------------------------------------------------------------------
-    // If unit capacity is remaining because a major course was locked by a failed prerequisite,
-    // fill the slot with eligible Minor/GE subjects or higher-year subjects with no prereqs!
     if (!isSummerTerm && termUnits < termMaxUnits && remainingCourses.size > 0) {
       const replacementCandidates = Array.from(remainingCourses)
         .map(code => courseMap.get(code))
         .filter(c => {
           if (!c) return false;
+          if (failedSet.has(c.code)) return false;
           if (c.semester === 'Summer' || c.semester === '3rd') return false;
           const prereqsMet = (c.prerequisites || []).every(pre => currentCompleted.has(pre));
           return prereqsMet;
         })
         .sort((a, b) => {
-          // Prioritize Minors, GE, PE, NSTP
           const isAMinor = a.code.startsWith('GE-') || a.code.startsWith('NSTP') || a.code.startsWith('TPE') || a.code.startsWith('EDM');
           const isBMinor = b.code.startsWith('GE-') || b.code.startsWith('NSTP') || b.code.startsWith('TPE') || b.code.startsWith('EDM');
           if (isAMinor && !isBMinor) return -1;
@@ -216,7 +220,7 @@ async function generateProspectusSchedule({
       }
     }
 
-    // Advance completed subjects at end of term
+    // Advance passedThisTerm to currentCompleted ONLY AT END OF TERM
     passedThisTerm.forEach(code => currentCompleted.add(code));
 
     if (termScheduled.length > 0) {
