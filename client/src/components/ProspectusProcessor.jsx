@@ -1,27 +1,16 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, CheckSquare, AlertTriangle } from 'lucide-react';
-import DagVisualizer from './DagVisualizer';
+import { Search, CheckSquare, Sparkles, X, ChevronRight, AlertCircle, Calendar, BookOpen, RotateCcw } from 'lucide-react';
 
 export default function ProspectusProcessor({ user }) {
-  const [program] = useState(user?.program || 'IT');
-  const [targetYearLevel, setTargetYearLevel] = useState(1);
-  const [targetSemester, setTargetSemester] = useState('2nd');
-  const [passedCourses] = useState(user?.passedCourses || []);
-  const [failedCourses, setFailedCourses] = useState(user?.failedCourses || ['CIS 1101']);
+  const [program, setProgram] = useState(user?.program || 'IT');
+  const [failedCourses, setFailedCourses] = useState(['CIS 1101']);
+  const [isModalOpen, setIsModalOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
-
-  // Exception Flags State
-  const [exceptionFlags, setExceptionFlags] = useState({
-    courseOverride: false,
-    overload: false,
-    simultaneous: false,
-    petitionNeeded: false
-  });
-
-  const [scheduleResult, setScheduleResult] = useState(null);
   const [availableCourses, setAvailableCourses] = useState([]);
+  const [scheduleResult, setScheduleResult] = useState(null);
+  const [isCalculated, setIsCalculated] = useState(false);
 
-  // Fetch Course Catalog for current Program
+  // Fetch Course Catalog for selected Program
   useEffect(() => {
     async function fetchCourses() {
       try {
@@ -30,29 +19,28 @@ export default function ProspectusProcessor({ user }) {
           const data = await res.json();
           if (data.success) {
             setAvailableCourses(data.courses);
-            return;
           }
         }
       } catch (err) {
-        console.warn('Backend server API offline, using fallback catalog');
+        console.warn('Backend server API offline, using catalog fallback');
       }
     }
     fetchCourses();
   }, [program]);
 
   // Recalculate Prospectus Schedule via Backend API
-  const calculateSchedule = useCallback(async () => {
+  const calculateCustomPath = useCallback(async () => {
     try {
       const response = await fetch('/api/generate-prospectus', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
           program,
-          passedCourses,
+          passedCourses: user?.passedCourses || [],
           failedCourses,
-          targetYearLevel,
-          targetSemester,
-          exceptionFlags
+          targetYearLevel: 1,
+          targetSemester: '2nd',
+          exceptionFlags: {}
         })
       });
 
@@ -60,20 +48,20 @@ export default function ProspectusProcessor({ user }) {
         const resData = await response.json();
         if (resData.success) {
           setScheduleResult(resData.data);
-          return;
+          setIsCalculated(true);
         }
       }
     } catch (err) {
-      console.warn('Fetch fallback to local calculation:', err);
+      console.warn('Fallback to standard calculation:', err);
     }
-  }, [program, passedCourses, failedCourses, targetYearLevel, targetSemester, exceptionFlags]);
+  }, [program, failedCourses, user]);
 
-  // Trigger recalculation on state changes
+  // Initial calculation on load
   useEffect(() => {
-    calculateSchedule();
-  }, [calculateSchedule]);
+    calculateCustomPath();
+  }, [calculateCustomPath]);
 
-  // Toggle Failed Course status cleanly (State Rollback)
+  // Toggle Failed Course checkmark
   const toggleFailedCourse = (code) => {
     if (failedCourses.includes(code)) {
       setFailedCourses(failedCourses.filter(c => c !== code));
@@ -82,307 +70,287 @@ export default function ProspectusProcessor({ user }) {
     }
   };
 
-  // Toggle Exception Switches
-  const toggleException = (key) => {
-    setExceptionFlags(prev => ({
-      ...prev,
-      [key]: !prev[key]
-    }));
-  };
+  // Group catalog courses by Year Level and Semester for normal prospectus view
+  const groupedCurriculum = availableCourses.reduce((acc, course) => {
+    const key = `Year ${course.yearLevel} • ${course.semester} Semester`;
+    if (!acc[key]) acc[key] = [];
+    acc[key].push(course);
+    return acc;
+  }, {});
 
-  // Filter courses for checklist
-  const filteredChecklistCourses = availableCourses.filter(c => 
+  // Filter courses in modal search
+  const filteredCourses = availableCourses.filter(c => 
     c.code.toLowerCase().includes(searchQuery.toLowerCase()) ||
     c.title.toLowerCase().includes(searchQuery.toLowerCase())
   );
 
   return (
-    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-6">
+    <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       
-      {/* Top Header Card */}
-      <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4">
+      {/* Top Banner Card */}
+      <div className="bg-white rounded-xl border border-slate-200/80 p-6 shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <div className="flex items-center space-x-2">
-            <span className="text-xs font-bold text-slate-900">{program} Curriculum</span>
-            <span className="text-slate-300">•</span>
-            <span className="text-xs text-slate-500">ID: {user?.username || '21102941'}</span>
+            <span className="text-xs font-bold text-slate-900 bg-slate-100 px-2.5 py-0.5 rounded border border-slate-200/60">
+              {program} Program
+            </span>
+            <span className="text-xs text-slate-500 font-medium">Student ID: {user?.username || '21102941'}</span>
           </div>
-          <h1 className="text-xl font-bold text-slate-900 mt-1">Prospectus Processor</h1>
-          <p className="text-xs text-slate-500">Calculate non-block prospectus schedule & evaluate DAG prerequisite chains.</p>
+          <h1 className="text-2xl font-bold text-slate-900 mt-1">Academic Prospectus</h1>
+          <p className="text-xs text-slate-500 font-normal">
+            View your standard curriculum flow or generate a custom path if you failed any subjects.
+          </p>
         </div>
 
-        {/* Term Selector */}
-        <div className="flex items-center space-x-2 bg-slate-50 p-1 rounded-lg border border-slate-200">
-          <select
-            value={targetYearLevel}
-            onChange={(e) => setTargetYearLevel(parseInt(e.target.value, 10))}
-            className="px-3 py-1.5 bg-white border border-slate-200 rounded text-xs font-semibold text-slate-800 cursor-pointer focus:outline-none"
-          >
-            <option value={1}>Year 1</option>
-            <option value={2}>Year 2</option>
-            <option value={3}>Year 3</option>
-            <option value={4}>Year 4</option>
-          </select>
-
-          <select
-            value={targetSemester}
-            onChange={(e) => setTargetSemester(e.target.value)}
-            className="px-3 py-1.5 bg-white border border-slate-200 rounded text-xs font-semibold text-slate-800 cursor-pointer focus:outline-none"
-          >
-            <option value="1st">1st Semester</option>
-            <option value="2nd">2nd Semester</option>
-            <option value="Summer">Summer Term</option>
-          </select>
-        </div>
+        {/* Primary Action Button */}
+        <button
+          onClick={() => setIsModalOpen(true)}
+          className="px-5 py-2.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg text-xs shadow-subtle transition-all duration-200 flex items-center justify-center space-x-2"
+        >
+          <Sparkles className="w-4 h-4 text-white" />
+          <span>Plan Your Academic Path!</span>
+        </button>
       </div>
 
-      {/* Main Grid: Control Panel (Left) & Output Schedule (Right) */}
-      <div className="grid grid-cols-1 lg:grid-cols-12 gap-6">
-        
-        {/* LEFT PANEL: INPUT SECTION & EXCEPTION TOGGLES (5 Cols) */}
-        <div className="lg:col-span-5 space-y-6">
-          
-          {/* Failed Course Checklist */}
-          <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-card space-y-3">
-            <div className="flex items-center justify-between">
-              <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900">Deficient / Failed Courses</h3>
-              {failedCourses.length > 0 && (
-                <span className="text-[11px] font-bold text-rose-700 bg-rose-50 px-2 py-0.5 rounded border border-rose-200">
-                  {failedCourses.length} Failed
-                </span>
-              )}
+      {/* Main Content Area */}
+      {isCalculated && failedCourses.length > 0 ? (
+        /* RECALCULATED CUSTOM PATH VIEW */
+        <div className="space-y-6">
+          <div className="flex items-center justify-between bg-slate-50 p-4 rounded-xl border border-slate-200/80">
+            <div>
+              <h2 className="text-sm font-bold text-slate-900">Custom Recalculated Prospectus Path</h2>
+              <p className="text-xs text-slate-500">
+                Adjusted schedule resolving {failedCourses.length} failed subject(s): <strong className="text-slate-800">{failedCourses.join(', ')}</strong>
+              </p>
+            </div>
+            <button
+              onClick={() => setIsModalOpen(true)}
+              className="text-xs font-semibold text-brand-600 hover:text-brand-700 bg-white px-3 py-1.5 rounded-lg border border-slate-200/80 shadow-subtle"
+            >
+              Modify Failed Courses
+            </button>
+          </div>
+
+          {/* Warning Banner if prerequisite lockouts occurred */}
+          {scheduleResult?.criticalPathWarnings?.length > 0 && (
+            <div className="bg-rose-50 border border-rose-200 rounded-xl p-4 text-xs text-rose-900 space-y-1">
+              <div className="font-bold flex items-center space-x-1.5 text-rose-800">
+                <AlertCircle className="w-4 h-4 text-rose-600" />
+                <span>Prerequisite Lockout Delay Detected</span>
+              </div>
+              <p className="text-[11px] text-rose-700">
+                {scheduleResult.criticalPathWarnings[0]?.message}
+              </p>
+            </div>
+          )}
+
+          {/* Scheduled Term Grid */}
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            
+            {/* Term 1: Target Term */}
+            <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-card space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <span className="text-xs font-bold text-slate-900">Next Upcoming Term</span>
+                <span className="text-xs font-bold text-brand-600">{scheduleResult?.totalScheduledUnits || 0} Units</span>
+              </div>
+
+              <div className="space-y-2">
+                {scheduleResult?.packedSchedule.map(course => (
+                  <div key={course.code} className="p-3 rounded-lg border border-slate-100 bg-white flex items-center justify-between">
+                    <div>
+                      <div className="flex items-center space-x-2">
+                        <span className="font-bold text-xs text-slate-900">{course.code}</span>
+                        {course.status === 'retake_required' && (
+                          <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-1.5 py-0.2 rounded">
+                            Retake
+                          </span>
+                        )}
+                      </div>
+                      <p className="text-xs text-slate-600">{course.title}</p>
+                    </div>
+                    <span className="text-xs font-bold text-slate-900">{course.units}u</span>
+                  </div>
+                ))}
+              </div>
             </div>
 
-            {/* Search filter */}
+            {/* Term 2: Next Prerequisites & Extended Path */}
+            <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-card space-y-3">
+              <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                <span className="text-xs font-bold text-slate-900">Follow-up Term (Prerequisite Unlocks)</span>
+                <span className="text-xs font-semibold text-slate-500">Subsequent Semester</span>
+              </div>
+
+              <div className="space-y-2">
+                {scheduleResult?.blockedPool.slice(0, 4).map(course => (
+                  <div key={course.code} className="p-3 rounded-lg border border-slate-100 bg-slate-50/50 flex items-center justify-between">
+                    <div>
+                      <span className="font-bold text-xs text-slate-700">{course.code}</span>
+                      <p className="text-xs text-slate-500">{course.title}</p>
+                      <p className="text-[10px] text-rose-600">Blocked by: {course.blockedBy?.join(', ')}</p>
+                    </div>
+                    <span className="text-xs font-bold text-slate-500">{course.units}u</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+
+          </div>
+        </div>
+      ) : (
+        /* STANDARD PROSPECTUS VIEW */
+        <div className="space-y-6">
+          <div className="flex items-center justify-between">
+            <h2 className="text-sm font-bold text-slate-900">Complete Program Prospectus Flow</h2>
+            <span className="text-xs text-slate-500">Standard Course Catalog</span>
+          </div>
+
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+            {Object.keys(groupedCurriculum).map(termTitle => (
+              <div key={termTitle} className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-card space-y-3">
+                <div className="flex items-center justify-between pb-2 border-b border-slate-100">
+                  <span className="text-xs font-bold text-slate-900">{termTitle}</span>
+                  <span className="text-[11px] font-semibold text-slate-400">
+                    {groupedCurriculum[termTitle].reduce((sum, c) => sum + c.units, 0)} Total Units
+                  </span>
+                </div>
+
+                <div className="space-y-2">
+                  {groupedCurriculum[termTitle].map(c => (
+                    <div key={c.code} className="p-2.5 rounded-lg border border-slate-100 bg-white flex items-center justify-between">
+                      <div>
+                        <div className="flex items-center space-x-2">
+                          <span className="font-bold text-xs text-slate-900">{c.code}</span>
+                          {c.prerequisites?.length > 0 && (
+                            <span className="text-[10px] text-slate-400">Prereq: {c.prerequisites.join(', ')}</span>
+                          )}
+                        </div>
+                        <p className="text-xs text-slate-600 font-medium">{c.title}</p>
+                      </div>
+                      <span className="text-xs font-bold text-slate-900">{c.units}u</span>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {/* PLAN YOUR ACADEMIC PATH MODAL */}
+      {isModalOpen && (
+        <div className="fixed inset-0 z-50 bg-slate-900/40 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white rounded-xl p-6 max-w-lg w-full shadow-card border border-slate-200 space-y-5 animate-fadeIn">
+            
+            {/* Modal Header */}
+            <div className="flex items-center justify-between border-b border-slate-100 pb-3">
+              <div>
+                <h3 className="text-base font-bold text-slate-900">Plan Your Academic Path!</h3>
+                <p className="text-xs text-slate-500">Check any subjects you failed or need to retake</p>
+              </div>
+              <button
+                onClick={() => setIsModalOpen(false)}
+                className="p-1 rounded-lg text-slate-400 hover:text-slate-600 hover:bg-slate-100 transition-colors"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            {/* Program Switcher */}
+            <div>
+              <label className="block text-xs font-semibold text-slate-700 mb-1">Select Program</label>
+              <div className="grid grid-cols-3 gap-2">
+                {['IT', 'CS', 'IS'].map(prog => (
+                  <button
+                    key={prog}
+                    type="button"
+                    onClick={() => setProgram(prog)}
+                    className={`py-1.5 text-xs font-bold rounded-lg border transition-colors ${
+                      program === prog
+                        ? 'bg-brand-500 text-white border-brand-500'
+                        : 'bg-slate-50 text-slate-700 border-slate-200 hover:bg-slate-100'
+                    }`}
+                  >
+                    BS {prog}
+                  </button>
+                ))}
+              </div>
+            </div>
+
+            {/* Search filter for subjects */}
             <div className="relative">
               <Search className="w-3.5 h-3.5 absolute left-3 top-2.5 text-slate-400" />
               <input
                 type="text"
-                placeholder="Filter subjects (e.g. CIS 1101)..."
+                placeholder="Search subject code (e.g. CIS 1101)..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
                 className="w-full pl-8 pr-3 py-1.5 bg-slate-50 border border-slate-200 rounded-lg text-xs text-slate-800 focus:outline-none focus:border-brand-500"
               />
             </div>
 
-            {/* Course Checklist */}
-            <div className="max-h-56 overflow-y-auto space-y-1 pr-1">
-              {filteredChecklistCourses.length === 0 ? (
-                <p className="text-center py-4 text-slate-400 text-xs">No subjects match search.</p>
-              ) : (
-                filteredChecklistCourses.map((c) => {
-                  const isChecked = failedCourses.includes(c.code);
-                  return (
-                    <div
-                      key={c.code}
-                      onClick={() => toggleFailedCourse(c.code)}
-                      className={`flex items-center justify-between p-2 rounded-lg border cursor-pointer transition-colors ${
-                        isChecked
-                          ? 'bg-rose-50/60 border-rose-200'
-                          : 'bg-white border-slate-100 hover:bg-slate-50'
-                      }`}
-                    >
-                      <div className="flex items-center space-x-2.5">
-                        <div className={`w-3.5 h-3.5 rounded flex items-center justify-center ${
-                          isChecked ? 'bg-rose-500 text-white' : 'border border-slate-300'
-                        }`}>
-                          {isChecked && <CheckSquare className="w-3 h-3 stroke-[3]" />}
-                        </div>
-                        <div>
-                          <p className={`text-xs font-bold ${isChecked ? 'text-rose-900' : 'text-slate-800'}`}>{c.code}</p>
-                          <p className="text-[10px] text-slate-500 line-clamp-1">{c.title}</p>
-                        </div>
-                      </div>
-                      <span className="text-[10px] font-medium text-slate-400">Yr {c.yearLevel}-{c.semester}</span>
-                    </div>
-                  );
-                })
-              )}
-            </div>
-          </div>
-
-          {/* Conditional Exception Toggles */}
-          <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-card space-y-3">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 border-b border-slate-100 pb-2">
-              Conditional Exceptions
-            </h3>
-
-            <div className="space-y-2.5">
-              
-              {/* 1. Course Override */}
-              <div className="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
-                <div>
-                  <label className="text-xs font-bold text-slate-800 block">Course Override</label>
-                  <p className="text-[10px] text-slate-500">Waive prerequisite restriction for target term</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => toggleException('courseOverride')}
-                  className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors ${
-                    exceptionFlags.courseOverride ? 'bg-brand-500' : 'bg-slate-300'
-                  }`}
-                >
-                  <div className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${
-                    exceptionFlags.courseOverride ? 'translate-x-4' : 'translate-x-0'
-                  }`} />
-                </button>
-              </div>
-
-              {/* 2. Overload Permission */}
-              <div className="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
-                <div>
-                  <label className="text-xs font-bold text-slate-800 block">Overload Permission</label>
-                  <p className="text-[10px] text-slate-500">Extend maximum credit load to 27 units</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => toggleException('overload')}
-                  className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors ${
-                    exceptionFlags.overload ? 'bg-brand-500' : 'bg-slate-300'
-                  }`}
-                >
-                  <div className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${
-                    exceptionFlags.overload ? 'translate-x-4' : 'translate-x-0'
-                  }`} />
-                </button>
-              </div>
-
-              {/* 3. Simultaneous Enrollment */}
-              <div className="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
-                <div>
-                  <label className="text-xs font-bold text-slate-800 block">Simultaneous Enrollment</label>
-                  <p className="text-[10px] text-slate-500">Co-enroll prerequisite & dependent in same term</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => toggleException('simultaneous')}
-                  className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors ${
-                    exceptionFlags.simultaneous ? 'bg-brand-500' : 'bg-slate-300'
-                  }`}
-                >
-                  <div className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${
-                    exceptionFlags.simultaneous ? 'translate-x-4' : 'translate-x-0'
-                  }`} />
-                </button>
-              </div>
-
-              {/* 4. Petition / Tutorial Request */}
-              <div className="flex items-center justify-between p-2.5 rounded-lg border border-slate-100 bg-slate-50/50">
-                <div>
-                  <label className="text-xs font-bold text-slate-800 block">Petition Request</label>
-                  <p className="text-[10px] text-slate-500">Flag off-cycle unoffered subjects</p>
-                </div>
-                <button
-                  type="button"
-                  onClick={() => toggleException('petitionNeeded')}
-                  className={`w-9 h-5 flex items-center rounded-full p-0.5 transition-colors ${
-                    exceptionFlags.petitionNeeded ? 'bg-brand-500' : 'bg-slate-300'
-                  }`}
-                >
-                  <div className={`bg-white w-4 h-4 rounded-full shadow transform transition-transform ${
-                    exceptionFlags.petitionNeeded ? 'translate-x-4' : 'translate-x-0'
-                  }`} />
-                </button>
-              </div>
-
-            </div>
-          </div>
-
-        </div>
-
-        {/* RIGHT PANEL: DYNAMIC OUTPUT SCHEDULE (7 Cols) */}
-        <div className="lg:col-span-7 space-y-6">
-          
-          <div className="bg-white rounded-xl border border-slate-200/80 p-5 shadow-card space-y-4">
-            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <div>
-                <h2 className="text-base font-bold text-slate-900">Target Term Schedule</h2>
-                <p className="text-xs text-slate-500">Year {targetYearLevel} • {targetSemester} Semester Optimal Schedule</p>
-              </div>
-
-              {/* Unit Load Progress */}
-              <div className="text-right">
-                <span className="text-xs font-bold text-slate-900">
-                  {scheduleResult?.totalScheduledUnits || 0} / {scheduleResult?.maxUnits || 21} Units
-                </span>
-                <div className="w-28 bg-slate-100 h-1.5 rounded-full overflow-hidden mt-1">
+            {/* Checklist of Courses */}
+            <div className="max-h-64 overflow-y-auto space-y-1.5 pr-1">
+              {filteredCourses.map(c => {
+                const isChecked = failedCourses.includes(c.code);
+                return (
                   <div
-                    className="bg-brand-500 h-full rounded-full transition-all duration-300"
-                    style={{ width: `${Math.min(100, ((scheduleResult?.totalScheduledUnits || 0) / (scheduleResult?.maxUnits || 21)) * 100)}%` }}
-                  />
-                </div>
-              </div>
-            </div>
-
-            {/* Critical Path Warning */}
-            {scheduleResult?.criticalPathWarnings?.length > 0 && (
-              <div className="bg-rose-50 border border-rose-200 rounded-lg p-3 text-xs text-rose-800 space-y-0.5">
-                <div className="font-bold flex items-center space-x-1">
-                  <AlertTriangle className="w-3.5 h-3.5 text-rose-600" />
-                  <span>DAG Lockout Warning</span>
-                </div>
-                <p className="text-[11px] text-rose-700">{scheduleResult.criticalPathWarnings[0]?.message}</p>
-              </div>
-            )}
-
-            {/* Scheduled Courses */}
-            <div className="space-y-2">
-              {!scheduleResult || scheduleResult.packedSchedule.length === 0 ? (
-                <p className="text-center py-8 text-slate-400 text-xs">No subjects scheduled for this term.</p>
-              ) : (
-                scheduleResult.packedSchedule.map((course) => {
-                  let badgeStyle = 'bg-emerald-50 text-emerald-700 border-emerald-200';
-                  let badgeLabel = 'Eligible';
-
-                  if (course.status === 'retake_required') {
-                    badgeStyle = 'bg-rose-100 text-rose-800 border-rose-200 font-bold';
-                    badgeLabel = 'Retake Required';
-                  } else if (course.status === 'override_waived') {
-                    badgeStyle = 'bg-brand-100 text-brand-800 border-brand-200 font-bold';
-                    badgeLabel = 'Override Active';
-                  } else if (course.status === 'simultaneous_coenroll') {
-                    badgeStyle = 'bg-amber-100 text-amber-800 border-amber-200 font-bold';
-                    badgeLabel = 'Simultaneous';
-                  } else if (course.status === 'petition_requested') {
-                    badgeStyle = 'bg-purple-100 text-purple-800 border-purple-200 font-bold';
-                    badgeLabel = 'Petition Needed';
-                  }
-
-                  return (
-                    <div
-                      key={course.code}
-                      className="p-3 rounded-lg border border-slate-100 bg-white flex items-center justify-between hover:border-slate-200 transition-colors"
-                    >
-                      <div>
-                        <div className="flex items-center space-x-2">
-                          <span className="font-bold text-xs text-slate-900">{course.code}</span>
-                          <span className={`text-[10px] px-2 py-0.5 rounded border ${badgeStyle}`}>
-                            {badgeLabel}
-                          </span>
-                        </div>
-                        <p className="text-xs text-slate-600 font-medium">{course.title}</p>
+                    key={c.code}
+                    onClick={() => toggleFailedCourse(c.code)}
+                    className={`flex items-center justify-between p-2.5 rounded-lg border cursor-pointer transition-colors ${
+                      isChecked
+                        ? 'bg-rose-50 border-rose-200'
+                        : 'bg-white border-slate-100 hover:bg-slate-50'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-2.5">
+                      <div className={`w-4 h-4 rounded flex items-center justify-center ${
+                        isChecked ? 'bg-rose-500 text-white' : 'border border-slate-300'
+                      }`}>
+                        {isChecked && <CheckSquare className="w-3.5 h-3.5 stroke-[3]" />}
                       </div>
-
-                      <div className="text-right">
-                        <span className="text-xs font-bold text-slate-900">{course.units}u</span>
+                      <div>
+                        <p className={`text-xs font-bold ${isChecked ? 'text-rose-900' : 'text-slate-800'}`}>{c.code}</p>
+                        <p className="text-[10px] text-slate-500 line-clamp-1">{c.title}</p>
                       </div>
                     </div>
-                  );
-                })
-              )}
+                    <span className="text-[10px] font-medium text-slate-400">Yr {c.yearLevel}-{c.semester}</span>
+                  </div>
+                );
+              })}
             </div>
+
+            {/* Action Buttons */}
+            <div className="flex items-center justify-between pt-2 border-t border-slate-100">
+              <span className="text-xs text-slate-500 font-medium">
+                {failedCourses.length} subject(s) marked failed
+              </span>
+
+              <div className="flex space-x-2">
+                <button
+                  type="button"
+                  onClick={() => setIsModalOpen(false)}
+                  className="px-3.5 py-1.5 bg-slate-100 hover:bg-slate-200 text-slate-700 font-semibold rounded-lg text-xs transition-colors"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  onClick={() => {
+                    calculateCustomPath();
+                    setIsModalOpen(false);
+                  }}
+                  className="px-4 py-1.5 bg-brand-500 hover:bg-brand-600 text-white font-semibold rounded-lg text-xs shadow-subtle transition-colors"
+                >
+                  Generate Path
+                </button>
+              </div>
+            </div>
+
           </div>
-
-          {/* DAG Visualizer */}
-          <DagVisualizer
-            dagNodes={scheduleResult?.dagNodes || []}
-            targetYearLevel={targetYearLevel}
-            targetSemester={targetSemester}
-          />
-
         </div>
+      )}
 
-      </div>
     </div>
   );
 }
