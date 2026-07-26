@@ -58,7 +58,7 @@ export default function AuthView({ onLoginSuccess }) {
   return (
     <div className="min-h-screen bg-slate-50 flex flex-col justify-center py-12 sm:px-6 lg:px-8">
       
-      {/* Logoless Minimalist Header */}
+      {/* Logoless Header */}
       <div className="sm:mx-auto sm:w-full sm:max-w-md text-center">
         <h1 className="text-2xl font-bold text-slate-900 tracking-tight">
           Semestral <span className="text-brand-500">Flow</span>
@@ -68,16 +68,16 @@ export default function AuthView({ onLoginSuccess }) {
         </p>
       </div>
 
-      {/* Main Login / Register Card */}
+      {/* Main Login / Register Card (Circular Rounded 3xl) */}
       <div className="mt-6 sm:mx-auto sm:w-full sm:max-w-md px-4">
-        <div className="bg-white py-8 px-6 sm:px-8 shadow-card rounded-xl border border-slate-200/80">
+        <div className="bg-white py-8 px-6 sm:px-8 shadow-card rounded-3xl border border-slate-200/80">
           
-          {/* Mode Switcher */}
-          <div className="flex bg-slate-100 p-1 rounded-lg mb-6 border border-slate-200/60">
+          {/* Circular Mode Switcher */}
+          <div className="flex bg-slate-100 p-1 rounded-full mb-6 border border-slate-200/60">
             <button
               type="button"
               onClick={() => { setIsRegister(false); setErrorMessage(''); }}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded transition-colors ${
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-full transition-all ${
                 !isRegister ? 'bg-white text-slate-900 shadow-subtle' : 'text-slate-500 hover:text-slate-900'
               }`}
             >
@@ -86,7 +86,7 @@ export default function AuthView({ onLoginSuccess }) {
             <button
               type="button"
               onClick={() => { setIsRegister(true); setErrorMessage(''); }}
-              className={`flex-1 py-1.5 text-xs font-semibold rounded transition-colors ${
+              className={`flex-1 py-1.5 text-xs font-semibold rounded-full transition-all ${
                 isRegister ? 'bg-white text-slate-900 shadow-subtle' : 'text-slate-500 hover:text-slate-900'
               }`}
             >
@@ -95,7 +95,7 @@ export default function AuthView({ onLoginSuccess }) {
           </div>
 
           {errorMessage && (
-            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-lg text-xs text-rose-700 font-medium">
+            <div className="mb-4 p-3 bg-rose-50 border border-rose-200 rounded-2xl text-xs text-rose-700 font-medium">
               {errorMessage}
             </div>
           )}
@@ -104,50 +104,50 @@ export default function AuthView({ onLoginSuccess }) {
             
             {isRegister && (
               <div>
-                <label className="block text-xs font-medium text-slate-700 mb-1">Full Name</label>
+                <label className="block text-xs font-medium text-slate-700 mb-1 ml-3">Full Name</label>
                 <input
                   type="text"
                   required
                   value={name}
                   onChange={(e) => setName(e.target.value)}
                   placeholder="e.g. Alicia Bactasa"
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                  className="w-full px-4 py-2 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
                 />
               </div>
             )}
 
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Student ID / Username</label>
+              <label className="block text-xs font-medium text-slate-700 mb-1 ml-3">Student ID / Username</label>
               <input
                 type="text"
                 required
                 value={username}
                 onChange={(e) => setUsername(e.target.value)}
                 placeholder="e.g. 21102941"
-                className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
+                className="w-full px-4 py-2 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500"
               />
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Program</label>
+              <label className="block text-xs font-medium text-slate-700 mb-1 ml-3">Program</label>
               <div className="relative">
                 <select
                   value={program}
                   onChange={(e) => setProgram(e.target.value)}
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 appearance-none cursor-pointer"
+                  className="w-full px-4 py-2 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 appearance-none cursor-pointer pr-8"
                 >
                   <option value="IT">BS Information Technology (BS IT)</option>
                   <option value="CS">BS Computer Science (BS CS)</option>
                   <option value="IS">BS Information Systems (BS IS)</option>
                 </select>
-                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-2.5 text-slate-400">
+                <div className="pointer-events-none absolute inset-y-0 right-0 flex items-center px-3.5 text-slate-400">
                   <BookOpen className="w-3.5 h-3.5" />
                 </div>
               </div>
             </div>
 
             <div>
-              <label className="block text-xs font-medium text-slate-700 mb-1">Password</label>
+              <label className="block text-xs font-medium text-slate-700 mb-1 ml-3">Password</label>
               <div className="relative">
                 <input
                   type={showPassword ? 'text' : 'password'}
@@ -155,12 +155,12 @@ export default function AuthView({ onLoginSuccess }) {
                   value={password}
                   onChange={(e) => setPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full px-3 py-2 bg-white border border-slate-200 rounded-lg text-xs text-slate-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 pr-9"
+                  className="w-full px-4 py-2 bg-white border border-slate-200 rounded-full text-xs text-slate-900 focus:outline-none focus:border-brand-500 focus:ring-1 focus:ring-brand-500 pr-10"
                 />
                 <button
                   type="button"
                   onClick={() => setShowPassword(!showPassword)}
-                  className="absolute inset-y-0 right-0 px-2.5 flex items-center text-slate-400 hover:text-slate-600"
+                  className="absolute inset-y-0 right-0 px-3.5 flex items-center text-slate-400 hover:text-slate-600"
                 >
                   {showPassword ? <EyeOff className="w-3.5 h-3.5" /> : <Eye className="w-3.5 h-3.5" />}
                 </button>
@@ -170,7 +170,7 @@ export default function AuthView({ onLoginSuccess }) {
             <button
               type="submit"
               disabled={isLoading}
-              className="w-full mt-2 py-2.5 px-4 bg-brand-500 hover:bg-brand-600 text-white font-medium rounded-lg text-xs transition-colors flex items-center justify-center space-x-2"
+              className="w-full mt-2 py-2.5 px-4 bg-brand-500 hover:bg-brand-600 text-white font-medium rounded-full text-xs transition-colors flex items-center justify-center space-x-2 shadow-subtle"
             >
               {isLoading ? (
                 <span>Authenticating...</span>
@@ -190,23 +190,23 @@ export default function AuthView({ onLoginSuccess }) {
               <button
                 type="button"
                 onClick={() => fillDemoStudent('IT', '21102941', 'Alicia Bactasa (IT)')}
-                className="px-2 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded text-[11px] font-medium text-slate-700 transition-colors"
+                className="px-2 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-full text-[11px] font-medium text-slate-700 transition-colors text-center"
               >
-                BS IT Student
+                BS IT
               </button>
               <button
                 type="button"
                 onClick={() => fillDemoStudent('CS', '21104882', 'Mark Rivera (CS)')}
-                className="px-2 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded text-[11px] font-medium text-slate-700 transition-colors"
+                className="px-2 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-full text-[11px] font-medium text-slate-700 transition-colors text-center"
               >
-                BS CS Student
+                BS CS
               </button>
               <button
                 type="button"
                 onClick={() => fillDemoStudent('IS', '21109920', 'Sarah Tan (IS)')}
-                className="px-2 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded text-[11px] font-medium text-slate-700 transition-colors"
+                className="px-2 py-1.5 bg-slate-50 hover:bg-slate-100 border border-slate-200/80 rounded-full text-[11px] font-medium text-slate-700 transition-colors text-center"
               >
-                BS IS Student
+                BS IS
               </button>
             </div>
           </div>
