@@ -4,15 +4,14 @@ const mongoose = require('mongoose');
 
 /**
  * Core Directed Acyclic Graph (DAG) Prospectus Generator for Irregular Students
- * Features Dynamic Historical State Rebuilding:
- * Processes historical terms chronologically with exact custom courses taken, passed, or failed.
+ * Features Dynamic Historical State Rebuilding & Precise Graduation Timeline Calculation
  */
 async function generateProspectusSchedule({
   program = 'IT',
   passedCourses = [],
   failedCourses = [],
   completedSemestersCount = 1,
-  historicalTermRecords = null, // Array of custom historical term objects: [{ termIndex: 1, courses: [{ code, status: 'passed'|'failed' }] }]
+  historicalTermRecords = null, // [{ termIndex: 1, courses: [{ code, status: 'passed'|'failed' }] }]
   exceptionFlags = {}
 }) {
   // 1. Fetch Course Catalog for selected Program
@@ -54,7 +53,10 @@ async function generateProspectusSchedule({
 
     { id: 'y5s1', yearLevel: 5, semester: '1st', label: 'Year 5 • 1st Semester (Extended)', maxUnits: 21, termIndex: 13 },
     { id: 'y5s2', yearLevel: 5, semester: '2nd', label: 'Year 5 • 2nd Semester (Extended)', maxUnits: 21, termIndex: 14 },
-    { id: 'y5sum', yearLevel: 5, semester: 'Summer', label: 'Year 5 • Summer Term (Extended)', maxUnits: 9, termIndex: 15, isSummer: true }
+    { id: 'y5sum', yearLevel: 5, semester: 'Summer', label: 'Year 5 • Summer Term (Extended)', maxUnits: 9, termIndex: 15, isSummer: true },
+
+    { id: 'y6s1', yearLevel: 6, semester: '1st', label: 'Year 6 • 1st Semester (Extended)', maxUnits: 21, termIndex: 16 },
+    { id: 'y6s2', yearLevel: 6, semester: '2nd', label: 'Year 6 • 2nd Semester (Extended)', maxUnits: 21, termIndex: 17 }
   ];
 
   function isMinorCourse(code) {
@@ -83,7 +85,6 @@ async function generateProspectusSchedule({
   const remainingCourses = new Set(allCourses.map(c => c.code));
 
   const regeneratedTerms = [];
-  let hasExtendedTerms = false;
   let highestActiveTermIndex = 1;
 
   // Process terms sequence chronologically
@@ -96,18 +97,13 @@ async function generateProspectusSchedule({
     }
 
     if (isCompletedTerm) {
-      // ---------------------------------------------------------------------
-      // DYNAMIC HISTORICAL TERM REBUILDING
-      // ---------------------------------------------------------------------
       let termCourseEntries = [];
 
-      // Check if custom historical record exists for this specific term
       const customRecord = Array.isArray(historicalTermRecords)
         ? historicalTermRecords.find(r => r.termIndex === termInfo.termIndex)
         : null;
 
       if (customRecord && Array.isArray(customRecord.courses)) {
-        // Use exact custom history specified by student
         termCourseEntries = customRecord.courses.map(entry => {
           const course = courseMap.get(entry.code) || {
             code: entry.code,
@@ -123,7 +119,6 @@ async function generateProspectusSchedule({
           return { course, isPassed, isFailed };
         });
       } else {
-        // Pre-populate default catalog courses for this term
         const stdCourses = allCourses.filter(c => {
           if (c.yearLevel !== termInfo.yearLevel) return false;
           return isCourseOfferedInSem(c, termInfo.semester);
@@ -136,11 +131,10 @@ async function generateProspectusSchedule({
         });
       }
 
-      // Update transcript state chronologically
       const completedTermCourses = termCourseEntries.map(({ course, isPassed, isFailed }) => {
         if (isPassed) {
           currentCompleted.add(course.code);
-          pendingFailedRetakes.delete(course.code); // Un-mark as failed if passed in a later term!
+          pendingFailedRetakes.delete(course.code);
           remainingCourses.delete(course.code);
         } else if (isFailed) {
           if (!currentCompleted.has(course.code)) {
@@ -175,7 +169,7 @@ async function generateProspectusSchedule({
     }
 
     // -----------------------------------------------------------------------
-    // FUTURE TERM (Auto-Scheduled by Algorithm based on True Cumulative State)
+    // FUTURE TERM SCHEDULING (Strict Prerequisite DAG Enforcement)
     // -----------------------------------------------------------------------
     const isSummerTerm = termInfo.isSummer;
     const termMaxUnits = termInfo.maxUnits;
@@ -207,7 +201,7 @@ async function generateProspectusSchedule({
       }
     }
 
-    // STEP 2: Regular & Cross-Year Curriculum Candidates
+    // STEP 2: Regular Curriculum Candidates
     const termCandidates = Array.from(remainingCourses)
       .map(code => courseMap.get(code))
       .filter(c => {
@@ -251,7 +245,7 @@ async function generateProspectusSchedule({
       }
     }
 
-    // STEP 3: Slot Fillers with General Education / Minors
+    // STEP 3: Fill Slot Freed Space with General Education / Minors
     if (!isSummerTerm && termUnits < termMaxUnits && remainingCourses.size > 0) {
       const minorCandidates = Array.from(remainingCourses)
         .map(code => courseMap.get(code))
@@ -285,10 +279,6 @@ async function generateProspectusSchedule({
     passedThisTerm.forEach(code => currentCompleted.add(code));
 
     if (termScheduled.length > 0) {
-      if (termInfo.yearLevel > 4) {
-        hasExtendedTerms = true;
-      }
-
       highestActiveTermIndex = termInfo.termIndex;
 
       regeneratedTerms.push({
@@ -305,7 +295,10 @@ async function generateProspectusSchedule({
   }
 
   // Calculate graduation metrics & delay breakdown
-  const regularTotalTerms = regeneratedTerms.filter(t => !t.semester.includes('Summer')).length;
+  // Count total regular semesters scheduled across entire curriculum sequence
+  const totalRegularTermsScheduled = regeneratedTerms.filter(t => !t.semester.includes('Summer')).length;
+  const lastScheduledTerm = regeneratedTerms[regeneratedTerms.length - 1];
+
   const completedUnits = Array.from(currentCompleted).reduce((sum, code) => {
     const c = courseMap.get(code);
     return sum + (c ? c.units : 0);
@@ -314,8 +307,15 @@ async function generateProspectusSchedule({
   const totalCurriculumUnits = allCourses.reduce((sum, c) => sum + c.units, 0);
   const remainingUnits = Math.max(0, totalCurriculumUnits - completedUnits);
 
-  const extraSemesters = hasExtendedTerms ? Math.max(0, regularTotalTerms - 8) : 0;
-  const graduationYear = new Date().getFullYear() + Math.ceil((12 - completedSemestersCount) / 3);
+  // A standard program takes 8 regular semesters (4 years)
+  const isDelayed = totalRegularTermsScheduled > 8 || (lastScheduledTerm && lastScheduledTerm.yearLevel > 4);
+  const extraSemesters = isDelayed ? Math.max(1, totalRegularTermsScheduled - 8) : 0;
+
+  const gradYear = lastScheduledTerm
+    ? (new Date().getFullYear() + Math.max(0, lastScheduledTerm.yearLevel - Math.ceil(completedSemestersCount / 3)))
+    : (new Date().getFullYear() + 4);
+
+  const gradSemLabel = lastScheduledTerm ? lastScheduledTerm.label : 'Year 4 • 2nd Semester';
 
   return {
     program,
@@ -323,15 +323,15 @@ async function generateProspectusSchedule({
     completedUnits,
     totalCurriculumUnits,
     remainingUnits,
-    hasExtendedTerms,
+    hasExtendedTerms: isDelayed,
     extraSemesters,
     highestActiveTermIndex,
     graduationSummary: {
-      estimatedYears: hasExtendedTerms ? (4 + extraSemesters * 0.5) : 4,
-      targetGraduationTerm: `AY ${graduationYear - 1}-${graduationYear} ${hasExtendedTerms ? 'Extended' : '2nd Sem'}`,
-      statusMessage: hasExtendedTerms
-        ? `Delayed by ${extraSemesters} Semester(s) (+${extraSemesters} Extended Term)`
-        : 'On Track for Graduation'
+      estimatedYears: isDelayed ? (4 + extraSemesters * 0.5) : 4,
+      targetGraduationTerm: `${gradSemLabel} (${isDelayed ? `Delayed by ${extraSemesters} Sem${extraSemesters > 1 ? 's' : ''}` : 'On Track'})`,
+      statusMessage: isDelayed
+        ? `Delayed by ${extraSemesters} Semester(s) (+${extraSemesters * 0.5} Year Extension)`
+        : 'On Track for 4-Year Graduation'
     },
     regeneratedTerms,
     dagNodes: allCourses.map(c => {

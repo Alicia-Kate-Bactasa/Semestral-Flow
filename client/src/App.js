@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, ArrowLeft, Moon, Sun, RotateCcw, Edit3, Plus, Trash2, Search } from 'lucide-react';
+import { ChevronRight, ArrowLeft, Moon, Sun, RotateCcw, Edit3, Plus, Trash2, Search, CheckCircle2 } from 'lucide-react';
 
 const TERM_NAMES = [
   'Year 1 • 1st Semester',
@@ -40,10 +40,11 @@ export default function App() {
   // Dynamic Historical Term Records: { [termIndex]: [ { code, title, units, status: 'passed' | 'failed' } ] }
   const [historicalRecords, setHistoricalRecords] = useState({});
 
-  // Course Catalog & Modals
+  // Course Catalog & Multi-Select Modal
   const [catalog, setCatalog] = useState([]);
   const [searchQuery, setSearchQuery] = useState('');
   const [showAddCourseModal, setShowAddCourseModal] = useState(false);
+  const [selectedModalCourses, setSelectedModalCourses] = useState([]);
 
   // Result state
   const [scheduleResult, setScheduleResult] = useState(null);
@@ -85,32 +86,40 @@ export default function App() {
     setHasChosenSemCount(false);
   };
 
-  // Step 2 Sub-step A: Sem Count Select
+  // Step 2 Sub-step A: Sem Count Select (Initializes EMPTY historical terms by default)
   const handleSelectSemesters = (count) => {
     setSemestersCount(count);
     setAuditTermIndex(0);
 
     const initialRecords = {};
     for (let t = 1; t <= count; t++) {
-      const termYear = Math.ceil(t / 3);
-      const termLabel = TERM_NAMES[t - 1] || '';
-
-      const stdCourses = catalog.filter((c) => {
-        const matchesYear = c.yearLevel === termYear;
-        const matchesSem = termLabel.includes(c.semester);
-        return matchesYear && matchesSem;
-      });
-
-      initialRecords[t] = stdCourses.map(c => ({
-        code: c.code,
-        title: c.title,
-        units: c.units,
-        status: 'passed' // Default passed, user can edit or toggle
-      }));
+      initialRecords[t] = [];
     }
 
     setHistoricalRecords(initialRecords);
     setHasChosenSemCount(true);
+  };
+
+  // Quick Action: Pre-fill & Pass all standard courses for a term
+  const handlePassAllStandardCourses = (termIdx) => {
+    const termKey = termIdx + 1;
+    const termYear = Math.ceil(termKey / 3);
+    const termLabel = TERM_NAMES[termIdx] || '';
+
+    const stdCourses = catalog.filter((c) => {
+      const matchesYear = c.yearLevel === termYear;
+      const matchesSem = termLabel.includes(c.semester);
+      return matchesYear && matchesSem;
+    });
+
+    const populated = stdCourses.map(c => ({
+      code: c.code,
+      title: c.title,
+      units: c.units,
+      status: 'passed'
+    }));
+
+    setHistoricalRecords({ ...historicalRecords, [termKey]: populated });
   };
 
   // Toggle course status in current historical term
@@ -134,25 +143,36 @@ export default function App() {
     setHistoricalRecords({ ...historicalRecords, [termKey]: updated });
   };
 
-  // Add custom course to current term history
-  const addCourseToTerm = (course) => {
+  // Multi-Select Course Toggle in Modal
+  const toggleModalCourseSelection = (course) => {
+    if (selectedModalCourses.some(c => c.code === course.code)) {
+      setSelectedModalCourses(selectedModalCourses.filter(c => c.code !== course.code));
+    } else {
+      setSelectedModalCourses([...selectedModalCourses, course]);
+    }
+  };
+
+  // Add all selected courses from modal to active term
+  const handleBatchAddSelectedCourses = () => {
     const termKey = auditTermIndex + 1;
     const currentList = historicalRecords[termKey] || [];
 
-    if (currentList.some(c => c.code === course.code)) {
-      setShowAddCourseModal(false);
-      return;
-    }
+    const newEntries = selectedModalCourses
+      .filter(sc => !currentList.some(c => c.code === sc.code))
+      .map(sc => ({
+        code: sc.code,
+        title: sc.title,
+        units: sc.units,
+        status: 'passed'
+      }));
 
-    const updated = [...currentList, {
-      code: course.code,
-      title: course.title,
-      units: course.units,
-      status: 'passed'
-    }];
+    setHistoricalRecords({
+      ...historicalRecords,
+      [termKey]: [...currentList, ...newEntries]
+    });
 
-    setHistoricalRecords({ ...historicalRecords, [termKey]: updated });
     setShowAddCourseModal(false);
+    setSelectedModalCourses([]);
     setSearchQuery('');
   };
 
@@ -189,7 +209,7 @@ export default function App() {
         const resData = await response.json();
         if (resData.success) {
           setScheduleResult(resData.data);
-          setStep(3); // Transition to Step 3: Your New Prospectus
+          setStep(3);
         }
       }
     } catch (err) {
@@ -239,7 +259,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-center items-center p-4 sm:p-6 transition-colors duration-200">
       
       {/* Top Header */}
-      <div className="w-full max-w-xl flex items-center justify-between mb-6">
+      <div className="w-full max-w-2xl flex items-center justify-between mb-6">
         <div className="flex items-center space-x-2">
           <div className="w-8 h-8 rounded-xl bg-brand-500 text-white font-black text-xs flex items-center justify-center shadow-glow">
             SF
@@ -258,7 +278,7 @@ export default function App() {
       </div>
 
       {/* Main Single Centered Card Container */}
-      <div className="w-full max-w-xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-card p-6 sm:p-8 space-y-6 transition-all">
+      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-card p-6 sm:p-8 space-y-6 transition-all">
         
         {/* Step Progress Bar */}
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
@@ -354,7 +374,7 @@ export default function App() {
                 </div>
               </div>
             ) : (
-              /* Sub-Step B: Term-by-Term Dynamic Audit with Add / Edit / Remove */
+              /* Sub-Step B: Term-by-Term Dynamic Audit */
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
@@ -366,31 +386,51 @@ export default function App() {
                     </h2>
                   </div>
 
-                  <button
-                    type="button"
-                    onClick={() => setShowAddCourseModal(true)}
-                    className="flex items-center space-x-1 px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
-                  >
-                    <Plus className="w-3.5 h-3.5" />
-                    <span>+ Add Custom Course</span>
-                  </button>
+                  <div className="flex items-center space-x-2">
+                    <button
+                      type="button"
+                      onClick={() => handlePassAllStandardCourses(auditTermIndex)}
+                      className="flex items-center space-x-1 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold rounded-xl transition-all"
+                    >
+                      <CheckCircle2 className="w-3.5 h-3.5" />
+                      <span>Pass All Standard</span>
+                    </button>
+
+                    <button
+                      type="button"
+                      onClick={() => { setSelectedModalCourses([]); setShowAddCourseModal(true); }}
+                      className="flex items-center space-x-1 px-3.5 py-1.5 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+                    >
+                      <Plus className="w-3.5 h-3.5" />
+                      <span>Select Courses</span>
+                    </button>
+                  </div>
                 </div>
 
                 <p className="text-xs text-slate-500 dark:text-slate-400">
-                  Review what you <strong>actually took</strong> during this term. Edit, add, or drop courses to match your custom transcript history:
+                  Select and mark what you <strong>actually took and passed/failed</strong> in this semester:
                 </p>
 
                 <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
                   {activeTermCourses.length === 0 ? (
-                    <div className="p-6 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-center space-y-2">
-                      <p className="text-xs text-slate-400 font-medium">No courses listed for this semester history.</p>
-                      <button
-                        type="button"
-                        onClick={() => setShowAddCourseModal(true)}
-                        className="text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline"
-                      >
-                        + Add a Course You Enrolled In
-                      </button>
+                    <div className="p-8 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-center space-y-3">
+                      <p className="text-xs text-slate-400 font-medium">No courses added for this semester yet.</p>
+                      <div className="flex items-center justify-center space-x-3">
+                        <button
+                          type="button"
+                          onClick={() => { setSelectedModalCourses([]); setShowAddCourseModal(true); }}
+                          className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+                        >
+                          + Select & Add Courses
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => handlePassAllStandardCourses(auditTermIndex)}
+                          className="px-4 py-2 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 text-xs font-bold rounded-xl transition-all"
+                        >
+                          Pass All Standard Courses
+                        </button>
+                      </div>
                     </div>
                   ) : (
                     activeTermCourses.map((course) => {
@@ -500,7 +540,7 @@ export default function App() {
                 Your Academic Result
               </span>
               <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
-                Your Projected Graduation: {scheduleResult.graduationSummary.targetGraduationTerm}
+                Projected Graduation: {scheduleResult.graduationSummary.targetGraduationTerm}
               </h2>
               <p className="text-xs text-brand-700 dark:text-brand-300 font-semibold">
                 {scheduleResult.graduationSummary.statusMessage}
@@ -583,51 +623,105 @@ export default function App() {
 
       </div>
 
-      {/* ADD CUSTOM COURSE TO HISTORICAL TERM MODAL */}
+      {/* LARGE MULTI-SELECT COURSE PICKER MODAL */}
       {showAddCourseModal && (
         <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl w-full max-w-md space-y-4">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col space-y-4 overflow-hidden">
+            
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
-              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
-                Add Course to {currentTermLabel} History
-              </h3>
-              <button onClick={() => setShowAddCourseModal(false)} className="text-slate-400 text-xs font-bold">
+              <div>
+                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                  Select Courses for {currentTermLabel}
+                </h3>
+                <p className="text-xs text-slate-400">
+                  Search and check all courses you enrolled in for this semester.
+                </p>
+              </div>
+              <button
+                onClick={() => { setShowAddCourseModal(false); setSelectedModalCourses([]); }}
+                className="text-slate-400 hover:text-slate-600 text-xs font-bold"
+              >
                 Cancel
               </button>
             </div>
 
+            {/* Search input */}
             <div className="relative">
-              <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
+              <Search className="w-4 h-4 absolute left-3.5 top-3 text-slate-400" />
               <input
                 type="text"
                 placeholder="Search subject code or title..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full pl-10 pr-4 py-2.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
 
-            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
-              {filteredCatalogToAdd.map((course) => (
-                <div
-                  key={course.code}
-                  onClick={() => addCourseToTerm(course)}
-                  className="p-3 bg-slate-50 dark:bg-slate-800 hover:bg-brand-50 dark:hover:bg-brand-950/40 border border-slate-200 dark:border-slate-700 rounded-2xl cursor-pointer transition-all flex items-center justify-between"
-                >
-                  <div>
-                    <span className="text-xs font-bold text-slate-900 dark:text-white block">
-                      {course.code}
-                    </span>
-                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
-                      {course.title}
+            {/* Course checklist grid */}
+            <div className="space-y-2 flex-1 overflow-y-auto pr-1">
+              {filteredCatalogToAdd.map((course) => {
+                const isSelected = selectedModalCourses.some(c => c.code === course.code);
+
+                return (
+                  <div
+                    key={course.code}
+                    onClick={() => toggleModalCourseSelection(course)}
+                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
+                      isSelected
+                        ? 'bg-brand-50 dark:bg-brand-950/40 border-brand-500 ring-1 ring-brand-500'
+                        : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border-slate-200 dark:border-slate-700'
+                    }`}
+                  >
+                    <div className="flex items-center space-x-3">
+                      <div className={`w-5 h-5 rounded-lg flex items-center justify-center border transition-colors ${
+                        isSelected ? 'bg-brand-500 border-brand-500 text-white' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700'
+                      }`}>
+                        {isSelected && <CheckCircle2 className="w-3.5 h-3.5" />}
+                      </div>
+
+                      <div>
+                        <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                          {course.code} ({course.units}u)
+                        </span>
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                          {course.title}
+                        </span>
+                      </div>
+                    </div>
+
+                    <span className="text-xs font-bold text-slate-400">
+                      Year {course.yearLevel} • {course.semester} Sem
                     </span>
                   </div>
-                  <span className="text-xs font-bold text-brand-600 dark:text-brand-400">
-                    {course.units}u
-                  </span>
-                </div>
-              ))}
+                );
+              })}
             </div>
+
+            {/* Batch Add Footer */}
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 flex items-center justify-between">
+              <span className="text-xs font-medium text-slate-500">
+                {selectedModalCourses.length} course(s) selected
+              </span>
+
+              <div className="flex items-center space-x-2">
+                <button
+                  type="button"
+                  onClick={() => { setShowAddCourseModal(false); setSelectedModalCourses([]); }}
+                  className="px-4 py-2 text-xs font-semibold text-slate-500 hover:text-slate-800"
+                >
+                  Cancel
+                </button>
+                <button
+                  type="button"
+                  disabled={selectedModalCourses.length === 0}
+                  onClick={handleBatchAddSelectedCourses}
+                  className="px-5 py-2.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-brand-500/20"
+                >
+                  Add Selected Courses ({selectedModalCourses.length})
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       )}
