@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, ArrowLeft, Moon, Sun, RotateCcw, Edit3 } from 'lucide-react';
+import { ChevronRight, ArrowLeft, Moon, Sun, RotateCcw, Edit3, Plus, Trash2, Search } from 'lucide-react';
 
 const TERM_NAMES = [
   'Year 1 • 1st Semester',
@@ -29,15 +29,19 @@ const AVAILABLE_MINORS = [
 
 export default function App() {
   // Wizard State
-  const [step, setStep] = useState(1); // 1: Program, 2: Sem Count, 3: Course Audit, 4: Result Plan
+  const [step, setStep] = useState(1); // 1: Program, 2: Sem Count, 3: Dynamic Course Audit, 4: Result Plan
   const [program, setProgram] = useState('IT');
   const [semestersCount, setSemestersCount] = useState(1);
-  const [auditTermIndex, setAuditTermIndex] = useState(0); // 0 to semestersCount - 1
+  const [auditTermIndex, setAuditTermIndex] = useState(0);
 
-  // Course selections
+  // Dynamic Historical Term Records
+  // Structure: { [termIndex]: [ { code, title, units, status: 'passed' | 'failed' } ] }
+  const [historicalRecords, setHistoricalRecords] = useState({});
+
+  // Course Catalog
   const [catalog, setCatalog] = useState([]);
-  const [passedCourses, setPassedCourses] = useState([]);
-  const [failedCourses, setFailedCourses] = useState([]);
+  const [searchQuery, setSearchQuery] = useState('');
+  const [showAddCourseModal, setShowAddCourseModal] = useState(false);
 
   // Result state
   const [scheduleResult, setScheduleResult] = useState(null);
@@ -80,46 +84,85 @@ export default function App() {
     setStep(2);
   };
 
-  // Step 2: Sem Count Select
+  // Step 2: Sem Count Select (Initialize Dynamic History for each term)
   const handleSelectSemesters = (count) => {
     setSemestersCount(count);
     setAuditTermIndex(0);
 
-    // Pre-populate Year 1 1st sem as passed by default
-    const y1s1Codes = catalog
-      .filter(c => c.yearLevel === 1 && (c.semester === '1st' || c.semester === '1'))
-      .map(c => c.code);
-    setPassedCourses(y1s1Codes);
-    setFailedCourses([]);
+    // Pre-populate default courses for all historical terms
+    const initialRecords = {};
+    for (let t = 1; t <= count; t++) {
+      const termYear = Math.ceil(t / 3);
+      const termLabel = TERM_NAMES[t - 1] || '';
 
+      const stdCourses = catalog.filter((c) => {
+        const matchesYear = c.yearLevel === termYear;
+        const matchesSem = termLabel.includes(c.semester);
+        return matchesYear && matchesSem;
+      });
+
+      initialRecords[t] = stdCourses.map(c => ({
+        code: c.code,
+        title: c.title,
+        units: c.units,
+        status: t === 1 ? 'passed' : 'passed' // Default passed, user can toggle or edit
+      }));
+    }
+
+    setHistoricalRecords(initialRecords);
     setStep(3);
   };
 
-  // Step 3 Audit Handlers
-  const toggleCourseStatus = (code, status) => {
-    if (status === 'passed') {
-      if (passedCourses.includes(code)) {
-        setPassedCourses(passedCourses.filter(c => c !== code));
-      } else {
-        setPassedCourses([...passedCourses, code]);
-        setFailedCourses(failedCourses.filter(c => c !== code));
+  // Toggle status for a course in current historical term
+  const toggleCourseStatusInTerm = (termIdx, code, newStatus) => {
+    const termKey = termIdx + 1;
+    const currentList = historicalRecords[termKey] || [];
+
+    const updated = currentList.map(c => {
+      if (c.code === code) {
+        return { ...c, status: c.status === newStatus ? 'unspecified' : newStatus };
       }
-    } else if (status === 'failed') {
-      if (failedCourses.includes(code)) {
-        setFailedCourses(failedCourses.filter(c => c !== code));
-      } else {
-        setFailedCourses([...failedCourses, code]);
-        setPassedCourses(passedCourses.filter(c => c !== code));
-      }
-    }
+      return c;
+    });
+
+    setHistoricalRecords({ ...historicalRecords, [termKey]: updated });
   };
 
-  // Next Semester inside Step 3
+  // Remove a course from current historical term
+  const removeCourseFromTerm = (termIdx, code) => {
+    const termKey = termIdx + 1;
+    const currentList = historicalRecords[termKey] || [];
+    const updated = currentList.filter(c => c.code !== code);
+    setHistoricalRecords({ ...historicalRecords, [termKey]: updated });
+  };
+
+  // Add a custom course to current historical term
+  const addCourseToTerm = (course) => {
+    const termKey = auditTermIndex + 1;
+    const currentList = historicalRecords[termKey] || [];
+
+    if (currentList.some(c => c.code === course.code)) {
+      setShowAddCourseModal(false);
+      return;
+    }
+
+    const updated = [...currentList, {
+      code: course.code,
+      title: course.title,
+      units: course.units,
+      status: 'passed'
+    }];
+
+    setHistoricalRecords({ ...historicalRecords, [termKey]: updated });
+    setShowAddCourseModal(false);
+    setSearchQuery('');
+  };
+
+  // Step 3 Audit Next / Calculate
   const handleNextAuditSemester = () => {
     if (auditTermIndex < semestersCount - 1) {
       setAuditTermIndex(auditTermIndex + 1);
     } else {
-      // Finished Audit! Generate Prospectus Plan
       generatePlan();
     }
   };
@@ -127,6 +170,13 @@ export default function App() {
   // Generate Plan API Call
   const generatePlan = async () => {
     setLoading(true);
+
+    // Format historicalTermRecords for backend
+    const historicalTermRecords = Object.keys(historicalRecords).map(termKey => ({
+      termIndex: parseInt(termKey, 10),
+      courses: historicalRecords[termKey]
+    }));
+
     try {
       const response = await fetch('/api/generate-prospectus', {
         method: 'POST',
@@ -134,8 +184,7 @@ export default function App() {
         body: JSON.stringify({
           program,
           completedSemestersCount: semestersCount,
-          passedCourses,
-          failedCourses
+          historicalTermRecords
         })
       });
 
@@ -148,7 +197,7 @@ export default function App() {
       }
     } catch (err) {
       console.warn('Generate plan failed:', err);
-    } fontally {
+    } finally {
       setLoading(false);
     }
   };
@@ -179,20 +228,21 @@ export default function App() {
     setSwapTarget(null);
   };
 
-  // Current audit term courses
-  const currentYearNum = Math.ceil((auditTermIndex + 1) / 3);
-  const currentTermLabel = TERM_NAMES[auditTermIndex] || `Term ${auditTermIndex + 1}`;
-  
-  const currentTermCourses = catalog.filter((c) => {
-    const matchesYear = c.yearLevel === currentYearNum;
-    const matchesSem = currentTermLabel.includes(c.semester);
-    return matchesYear && matchesSem;
-  });
+  // Current active audit term data
+  const currentTermKey = auditTermIndex + 1;
+  const currentTermLabel = TERM_NAMES[auditTermIndex] || `Term ${currentTermKey}`;
+  const activeTermCourses = historicalRecords[currentTermKey] || [];
+
+  // Catalog filtered for add course modal
+  const filteredCatalogToAdd = catalog.filter(c => 
+    c.code.toLowerCase().includes(searchQuery.toLowerCase()) || 
+    c.title.toLowerCase().includes(searchQuery.toLowerCase())
+  );
 
   return (
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-center items-center p-4 sm:p-6 transition-colors duration-200">
       
-      {/* Top Simple Brand & Dark Mode Toggle */}
+      {/* Top Header */}
       <div className="w-full max-w-xl flex items-center justify-between mb-6">
         <div className="flex items-center space-x-2">
           <div className="w-8 h-8 rounded-xl bg-brand-500 text-white font-black text-xs flex items-center justify-center">
@@ -296,7 +346,7 @@ export default function App() {
           </div>
         )}
 
-        {/* STEP 3: TERM-BY-TERM INTERACTIVE AUDIT */}
+        {/* STEP 3: DYNAMIC HISTORICAL STATE REBUILDING AUDIT */}
         {step === 3 && (
           <div className="space-y-6 animate-fadeIn">
             <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-3">
@@ -309,22 +359,36 @@ export default function App() {
                 </h2>
               </div>
 
-              <span className="text-xs font-semibold text-slate-400">
-                BS {program}
-              </span>
+              <button
+                type="button"
+                onClick={() => setShowAddCourseModal(true)}
+                className="flex items-center space-x-1 px-3 py-1.5 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+              >
+                <Plus className="w-3.5 h-3.5" />
+                <span>Add / Edit Course</span>
+              </button>
             </div>
 
             <p className="text-xs text-slate-500 dark:text-slate-400">
-              Tap <strong className="text-emerald-600">Passed</strong> or <strong className="text-rose-600">Failed</strong> for each subject in this semester:
+              Audit what you <strong>actually took and passed/failed</strong> in this semester. You can edit, add, or drop courses to match your true history:
             </p>
 
             <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
-              {currentTermCourses.length === 0 ? (
-                <p className="text-xs text-slate-400 py-4 text-center">No standard courses found for this term.</p>
+              {activeTermCourses.length === 0 ? (
+                <div className="p-6 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-center space-y-2">
+                  <p className="text-xs text-slate-400 font-medium">No courses listed for this semester history.</p>
+                  <button
+                    type="button"
+                    onClick={() => setShowAddCourseModal(true)}
+                    className="text-xs font-bold text-brand-600 dark:text-brand-400 hover:underline"
+                  >
+                    + Add a Course You Enrolled In
+                  </button>
+                </div>
               ) : (
-                currentTermCourses.map((course) => {
-                  const isPassed = passedCourses.includes(course.code);
-                  const isFailed = failedCourses.includes(course.code);
+                activeTermCourses.map((course) => {
+                  const isPassed = course.status === 'passed';
+                  const isFailed = course.status === 'failed';
 
                   return (
                     <div
@@ -337,11 +401,11 @@ export default function App() {
                               : 'bg-slate-50 dark:bg-slate-850 border-slate-200 dark:border-slate-800')
                       }`}
                     >
-                      <div className="pr-2">
+                      <div className="pr-2 min-w-0">
                         <span className="text-xs font-bold text-slate-900 dark:text-white block">
                           {course.code} ({course.units}u)
                         </span>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1">
+                        <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate block">
                           {course.title}
                         </span>
                       </div>
@@ -349,7 +413,7 @@ export default function App() {
                       <div className="flex items-center space-x-1.5 shrink-0">
                         <button
                           type="button"
-                          onClick={() => toggleCourseStatus(course.code, 'passed')}
+                          onClick={() => toggleCourseStatusInTerm(auditTermIndex, course.code, 'passed')}
                           className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
                             isPassed
                               ? 'bg-emerald-500 text-white shadow-sm'
@@ -360,7 +424,7 @@ export default function App() {
                         </button>
                         <button
                           type="button"
-                          onClick={() => toggleCourseStatus(course.code, 'failed')}
+                          onClick={() => toggleCourseStatusInTerm(auditTermIndex, course.code, 'failed')}
                           className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
                             isFailed
                               ? 'bg-rose-500 text-white shadow-sm'
@@ -368,6 +432,14 @@ export default function App() {
                           }`}
                         >
                           Failed
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => removeCourseFromTerm(auditTermIndex, course.code)}
+                          title="Remove course from this term"
+                          className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
+                        >
+                          <Trash2 className="w-3.5 h-3.5" />
                         </button>
                       </div>
                     </div>
@@ -401,7 +473,7 @@ export default function App() {
                 disabled={loading}
                 className="flex items-center space-x-2 px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-brand-500/20"
               >
-                <span>{auditTermIndex < semestersCount - 1 ? 'Next Semester' : 'Calculate My Prospectus'}</span>
+                <span>{auditTermIndex < semestersCount - 1 ? 'Next Semester' : 'Calculate Prospectus'}</span>
                 <ChevronRight className="w-4 h-4" />
               </button>
             </div>
@@ -500,6 +572,55 @@ export default function App() {
         )}
 
       </div>
+
+      {/* ADD CUSTOM COURSE TO HISTORICAL TERM MODAL */}
+      {showAddCourseModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl w-full max-w-md space-y-4">
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
+              <h3 className="text-sm font-bold text-slate-900 dark:text-white">
+                Add Course to {currentTermLabel} History
+              </h3>
+              <button onClick={() => setShowAddCourseModal(false)} className="text-slate-400 text-xs font-bold">
+                Cancel
+              </button>
+            </div>
+
+            <div className="relative">
+              <Search className="w-3.5 h-3.5 absolute left-3 top-3 text-slate-400" />
+              <input
+                type="text"
+                placeholder="Search subject code or title..."
+                value={searchQuery}
+                onChange={(e) => setSearchQuery(e.target.value)}
+                className="w-full pl-9 pr-3 py-2 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+              />
+            </div>
+
+            <div className="space-y-2 max-h-60 overflow-y-auto pr-1">
+              {filteredCatalogToAdd.map((course) => (
+                <div
+                  key={course.code}
+                  onClick={() => addCourseToTerm(course)}
+                  className="p-3 bg-slate-50 dark:bg-slate-800 hover:bg-brand-50 dark:hover:bg-brand-950/40 border border-slate-200 dark:border-slate-700 rounded-2xl cursor-pointer transition-all flex items-center justify-between"
+                >
+                  <div>
+                    <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                      {course.code}
+                    </span>
+                    <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                      {course.title}
+                    </span>
+                  </div>
+                  <span className="text-xs font-bold text-brand-600 dark:text-brand-400">
+                    {course.units}u
+                  </span>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
 
       {/* SWAP MINOR MODAL */}
       {swapTarget && (
