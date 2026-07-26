@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ChevronRight, ArrowLeft, Moon, Sun, RotateCcw, Edit3, Plus, Trash2, Search, CheckCircle2 } from 'lucide-react';
+import { ChevronRight, ArrowLeft, Moon, Sun, RotateCcw, Edit3, Plus, Trash2, Search, CheckCircle2, History } from 'lucide-react';
 
 const TERM_NAMES = [
   'Year 1 • 1st Semester',
@@ -24,7 +24,7 @@ const AVAILABLE_MINORS = [
   { code: 'NSTP 1', title: 'National Service Training Program I', units: 3 },
   { code: 'NSTP 2', title: 'National Service Training Program II', units: 3 },
   { code: 'TPE 1101', title: 'Physical Education I', units: 2 },
-  { code: 'TPE 1102', title: 'Physical Education II', units: 2 },
+  { code: 'TPE 1202', title: 'Physical Education II', units: 2 },
 ];
 
 export default function App() {
@@ -51,6 +51,7 @@ export default function App() {
   const [loading, setLoading] = useState(false);
   const [darkMode, setDarkMode] = useState(false);
   const [swapTarget, setSwapTarget] = useState(null);
+  const [showHistorySummary, setShowHistorySummary] = useState(true);
 
   // Dark mode effect
   useEffect(() => {
@@ -546,6 +547,70 @@ export default function App() {
                 {scheduleResult.graduationSummary.statusMessage}
               </p>
             </div>
+
+            {/* AUDIT HISTORY RENDERING SUMMARY (READ-ONLY) */}
+            {scheduleResult.historicalSummary && scheduleResult.historicalSummary.length > 0 && (
+              <div className="border border-slate-200/80 dark:border-slate-800 rounded-3xl p-5 bg-slate-50/50 dark:bg-slate-850/50 space-y-3">
+                <div className="flex items-center justify-between border-b border-slate-200 dark:border-slate-800 pb-3">
+                  <div className="flex items-center space-x-2">
+                    <History className="w-4 h-4 text-brand-500" />
+                    <h3 className="text-xs font-bold uppercase tracking-wider text-slate-900 dark:text-white">
+                      Audited Transcript History ({scheduleResult.historicalSummary.length} Semesters Completed)
+                    </h3>
+                  </div>
+                  <button
+                    type="button"
+                    onClick={() => setShowHistorySummary(!showHistorySummary)}
+                    className="text-xs font-semibold text-brand-600 dark:text-brand-400"
+                  >
+                    {showHistorySummary ? 'Hide History' : 'Show History'}
+                  </button>
+                </div>
+
+                {showHistorySummary && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-3 max-h-[300px] overflow-y-auto pr-1">
+                    {scheduleResult.historicalSummary.map((histTerm) => (
+                      <div
+                        key={histTerm.id}
+                        className="p-3.5 bg-white dark:bg-slate-800 border border-slate-200/70 dark:border-slate-750 rounded-2xl space-y-2"
+                      >
+                        <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-700 pb-1.5">
+                          <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
+                            {histTerm.label}
+                          </span>
+                          <span className="text-[10px] font-semibold text-slate-400">
+                            {histTerm.totalUnits} Units
+                          </span>
+                        </div>
+
+                        <div className="space-y-1">
+                          {histTerm.courses.map((c) => {
+                            const isPassed = c.status === 'passed_historical' || c.status === 'passed';
+                            return (
+                              <div
+                                key={c.code}
+                                className="flex items-center justify-between text-[11px]"
+                              >
+                                <span className="text-slate-700 dark:text-slate-300 font-medium truncate pr-2">
+                                  {c.code} - {c.title}
+                                </span>
+                                <span className={`px-2 py-0.5 text-[9px] font-bold rounded-full shrink-0 ${
+                                  isPassed
+                                    ? 'bg-emerald-100 text-emerald-800 dark:bg-emerald-950 dark:text-emerald-300'
+                                    : 'bg-rose-100 text-rose-800 dark:bg-rose-950 dark:text-rose-300'
+                                }`}>
+                                  {isPassed ? 'Passed' : 'Failed'}
+                                </span>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                )}
+              </div>
+            )}
 
             {/* Future Semesters Stacked View */}
             <div className="space-y-4">

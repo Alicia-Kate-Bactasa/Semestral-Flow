@@ -4,17 +4,18 @@ const mongoose = require('mongoose');
 
 /**
  * Core Directed Acyclic Graph (DAG) Prospectus Generator for Irregular Students
- * Strict Rules:
- * 1. Global CompletedSet (Blacklist): Every course passed in history is permanently excluded from future scheduling.
- * 2. Deduplication Pass: Remaining curriculum = masterCurriculum.filter(course => !completedSet.has(course.code)).
- * 3. Failed Course Priority Re-insertion: Failed retakes scheduled into very next available term where prereqs are met.
+ * 
+ * 3-PHASE PIPELINE:
+ * Phase 1: Transcript Normalization & Permanent Blacklist (PassedCourses Set) & Retake Queue (FailedOrPending Set)
+ * Phase 2: Curriculum Filtering & Prerequisite Verification (DAG Traversal with Standing Waiver & Downstream Bottleneck Priority)
+ * Phase 3: Knapsack Credit Packing, Timeline Projection & Audit History Summary
  */
 async function generateProspectusSchedule({
   program = 'IT',
   passedCourses = [],
   failedCourses = [],
   completedSemestersCount = 1,
-  historicalTermRecords = null, // [{ termIndex: 1, courses: [{ code, status: 'passed'|'failed' }] }]
+  historicalTermRecords = null, // [{ termIndex: 1, courses: [{ code, title, units, status: 'passed'|'failed' }] }]
   exceptionFlags = {}
 }) {
   // 1. Fetch Course Catalog for selected Program
@@ -81,12 +82,13 @@ async function generateProspectusSchedule({
   }
 
   // -------------------------------------------------------------------------
-  // RULE 1: BUILD GLOBAL CompletedSet (THE BLACKLIST) & FailedSet
+  // PHASE 1: TRANSCRIPT NORMALIZATION & BLACKLIST CREATION
   // -------------------------------------------------------------------------
-  const completedSet = new Set(passedCourses);
-  const failedSet = new Set(failedCourses);
+  const PassedCourses = new Set(passedCourses);
+  const FailedOrPending = new Set(failedCourses);
 
   const regeneratedTerms = [];
+  const historicalSummary = [];
 
   if (Array.isArray(historicalTermRecords)) {
     historicalTermRecords.forEach(record => {
@@ -112,11 +114,11 @@ async function generateProspectusSchedule({
           const isFailed = entry.status === 'failed';
 
           if (isPassed) {
-            completedSet.add(course.code);
-            failedSet.delete(course.code); // Un-fail if passed in any term!
+            PassedCourses.add(course.code);
+            FailedOrPending.delete(course.code); // Un-fail if passed in any historical term!
           } else if (isFailed) {
-            if (!completedSet.has(course.code)) {
-              failedSet.add(course.code);
+            if (!PassedCourses.has(course.code)) {
+              FailedOrPending.add(course.code);
             }
           }
 
@@ -131,7 +133,7 @@ async function generateProspectusSchedule({
           };
         });
 
-        regeneratedTerms.push({
+        const termData = {
           id: `hist_${record.termIndex}`,
           yearLevel: termInfo.yearLevel,
           semester: termInfo.semester,
@@ -140,32 +142,35 @@ async function generateProspectusSchedule({
           totalUnits: termCourses.reduce((sum, c) => sum + (c.units || 0), 0),
           maxUnits: termInfo.maxUnits,
           courses: termCourses
-        });
+        };
+
+        regeneratedTerms.push(termData);
+        historicalSummary.push(termData);
       }
     });
   }
 
   // -------------------------------------------------------------------------
-  // RULE 2: DEDUPLICATION PASS ON THE CURRICULUM MASTER TREE
-  // Filter out ANY course that exists in completedSet (The Blacklist)
+  // PHASE 2: CURRICULUM FILTERING & PREREQUISITE VERIFICATION (DAG)
+  // Deduplication Pass: Filter out everything in PassedCourses (The Blacklist)
   // -------------------------------------------------------------------------
-  const remainingCurriculumList = allCourses.filter(course => !completedSet.has(course.code));
-  const remainingCoursesSet = new Set(remainingCurriculumList.map(c => c.code));
+  const remainingCurriculum = allCourses.filter(course => !PassedCourses.has(course.code));
+  const remainingCoursesSet = new Set(remainingCurriculum.map(c => c.code));
 
-  // Pending failed retakes pool (must not be in completedSet)
-  const pendingFailedRetakes = new Set(Array.from(failedSet).filter(code => !completedSet.has(code)));
+  // Retake Queue: Failed or pending courses not yet passed
+  const pendingFailedRetakes = new Set(Array.from(FailedOrPending).filter(code => !PassedCourses.has(code)));
 
   let highestActiveTermIndex = completedSemestersCount;
 
   // -------------------------------------------------------------------------
-  // RULE 3: SCHEDULE REMAINING FUTURE TERMS WITH FAILED RETAKE PRIORITY
+  // PHASE 3: KNAPSACK CREDIT PACKING & TIMELINE PROJECTION
   // -------------------------------------------------------------------------
   for (let i = 0; i < termsSequence.length; i++) {
     const termInfo = termsSequence[i];
     if (termInfo.termIndex <= completedSemestersCount) continue; // Skip completed historical terms
 
     if (remainingCoursesSet.size === 0 && pendingFailedRetakes.size === 0) {
-      break; // 100% of curriculum completed!
+      break; // 100% of curriculum cleared!
     }
 
     const isSummerTerm = termInfo.isSummer;
@@ -175,12 +180,12 @@ async function generateProspectusSchedule({
     const termScheduled = [];
     const passedThisTerm = [];
 
-    // STEP 1: Highest Priority -> Re-insert Pending Failed Retakes
+    // Priority 1: Mandatory Retakes from FailedOrPending Set
     for (const failedCode of Array.from(pendingFailedRetakes)) {
       const course = courseMap.get(failedCode);
       if (!course) continue;
 
-      const prereqsMet = (course.prerequisites || []).every(pre => completedSet.has(pre));
+      const prereqsMet = (course.prerequisites || []).every(pre => PassedCourses.has(pre));
       if (prereqsMet && (termUnits + course.units <= termMaxUnits)) {
         termUnits += course.units;
         termScheduled.push({
@@ -193,13 +198,13 @@ async function generateProspectusSchedule({
           isReplacement: false
         });
         passedThisTerm.push(failedCode);
-        pendingFailedRetakes.delete(failedCode); // Remove from pending once scheduled!
+        pendingFailedRetakes.delete(failedCode); // Remove from queue once scheduled
         remainingCoursesSet.delete(failedCode);
       }
     }
 
-    // STEP 2: Regular Curriculum Candidates
-    const termCandidates = Array.from(remainingCoursesSet)
+    // Priority 2: Downstream Bottleneck Courses (Courses that unlock many future prerequisites)
+    const candidatePool = Array.from(remainingCoursesSet)
       .map(code => courseMap.get(code))
       .filter(c => {
         if (!c) return false;
@@ -208,11 +213,18 @@ async function generateProspectusSchedule({
         const isSemOffered = isCourseOfferedInSem(c, termInfo.semester);
         if (!isSemOffered) return false;
 
-        const prereqsMet = (c.prerequisites || []).every(pre => completedSet.has(pre));
+        const prereqsMet = (c.prerequisites || []).every(pre => PassedCourses.has(pre));
         return prereqsMet;
       })
       .sort((a, b) => {
+        // Bottleneck sorting: prioritize courses that unlock the most downstream subjects!
+        const aUnlockCount = (a.ifPassCanTake || []).length;
+        const bUnlockCount = (b.ifPassCanTake || []).length;
+        if (bUnlockCount !== aUnlockCount) return bUnlockCount - aUnlockCount;
+
+        // Standing waiver: courses without prereqs can be pulled forward into earlier slots
         if (a.yearLevel !== b.yearLevel) return a.yearLevel - b.yearLevel;
+
         const aMinor = isMinorCourse(a.code);
         const bMinor = isMinorCourse(b.code);
         if (!aMinor && bMinor) return -1;
@@ -220,7 +232,7 @@ async function generateProspectusSchedule({
         return 0;
       });
 
-    for (const course of termCandidates) {
+    for (const course of candidatePool) {
       if (!remainingCoursesSet.has(course.code)) continue;
 
       if (termUnits + course.units <= termMaxUnits) {
@@ -242,14 +254,14 @@ async function generateProspectusSchedule({
       }
     }
 
-    // STEP 3: Minor Slot Replacements
+    // Priority 3: Electives and Minors (Editable / Swappable)
     if (!isSummerTerm && termUnits < termMaxUnits && remainingCoursesSet.size > 0) {
       const minorCandidates = Array.from(remainingCoursesSet)
         .map(code => courseMap.get(code))
         .filter(c => {
           if (!c) return false;
           if (!isMinorCourse(c.code)) return false;
-          const prereqsMet = (c.prerequisites || []).every(pre => completedSet.has(pre));
+          const prereqsMet = (c.prerequisites || []).every(pre => PassedCourses.has(pre));
           return prereqsMet;
         });
 
@@ -273,8 +285,8 @@ async function generateProspectusSchedule({
       }
     }
 
-    // Advance passedThisTerm into completedSet for subsequent terms
-    passedThisTerm.forEach(code => completedSet.add(code));
+    // Advance passedThisTerm into PassedCourses for subsequent terms
+    passedThisTerm.forEach(code => PassedCourses.add(code));
 
     if (termScheduled.length > 0) {
       highestActiveTermIndex = termInfo.termIndex;
@@ -292,11 +304,11 @@ async function generateProspectusSchedule({
     }
   }
 
-  // Calculate graduation metrics & delay breakdown
+  // Extension & Delay Calculation
   const totalRegularTermsScheduled = regeneratedTerms.filter(t => !t.semester.includes('Summer')).length;
   const lastScheduledTerm = regeneratedTerms[regeneratedTerms.length - 1];
 
-  const completedUnits = Array.from(completedSet).reduce((sum, code) => {
+  const completedUnits = Array.from(PassedCourses).reduce((sum, code) => {
     const c = courseMap.get(code);
     return sum + (c ? c.units : 0);
   }, 0);
@@ -325,11 +337,12 @@ async function generateProspectusSchedule({
         ? `Delayed by ${extraSemesters} Semester(s) (+${extraSemesters * 0.5} Year Extension)`
         : 'On Track for 4-Year Graduation'
     },
+    historicalSummary,
     regeneratedTerms,
     dagNodes: allCourses.map(c => {
       const isFailed = pendingFailedRetakes.has(c.code);
-      const isPassed = completedSet.has(c.code);
-      const prereqsMet = (c.prerequisites || []).every(p => completedSet.has(p));
+      const isPassed = PassedCourses.has(c.code);
+      const prereqsMet = (c.prerequisites || []).every(p => PassedCourses.has(p));
 
       let state = 'locked';
       if (isPassed) state = 'completed';
