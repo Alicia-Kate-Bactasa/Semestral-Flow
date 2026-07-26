@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Check, Sparkles, ArrowRight, RotateCcw, BookOpen, AlertCircle, CheckCircle2 } from 'lucide-react';
+import { Search, Check, Sparkles, ArrowRight, RotateCcw, BookOpen, AlertCircle, CheckCircle2, Sun } from 'lucide-react';
 
 export default function ProspectusProcessor({ user }) {
   const [program, setProgram] = useState(user?.program || 'IT');
@@ -86,33 +86,37 @@ export default function ProspectusProcessor({ user }) {
   const hasExtension = scheduleResult?.blockedPool?.some(b => b.yearLevel >= 4);
   const yearTabs = hasExtension ? [1, 2, 3, 4, 5] : [1, 2, 3, 4];
 
-  // Group catalog courses by Year Level and Semester
+  // Group catalog courses by Year Level and Semester (Including Summer Term)
   const coursesByYear = {
     1: {
-      '1st Semester': availableCourses.filter(c => c.yearLevel === 1 && c.semester === '1st'),
-      '2nd Semester': availableCourses.filter(c => c.yearLevel === 1 && c.semester === '2nd'),
+      '1st Semester': availableCourses.filter(c => c.yearLevel === 1 && (c.semester === '1st' || c.semester === '1')),
+      '2nd Semester': availableCourses.filter(c => c.yearLevel === 1 && (c.semester === '2nd' || c.semester === '2')),
+      'Summer Term': availableCourses.filter(c => c.yearLevel === 1 && (c.semester === 'Summer' || c.semester === '3rd' || c.semester === '3')),
     },
     2: {
-      '1st Semester': availableCourses.filter(c => c.yearLevel === 2 && c.semester === '1st'),
-      '2nd Semester': availableCourses.filter(c => c.yearLevel === 2 && c.semester === '2nd'),
+      '1st Semester': availableCourses.filter(c => c.yearLevel === 2 && (c.semester === '1st' || c.semester === '1')),
+      '2nd Semester': availableCourses.filter(c => c.yearLevel === 2 && (c.semester === '2nd' || c.semester === '2')),
+      'Summer Term': availableCourses.filter(c => c.yearLevel === 2 && (c.semester === 'Summer' || c.semester === '3rd' || c.semester === '3')),
     },
     3: {
-      '1st Semester': availableCourses.filter(c => c.yearLevel === 3 && c.semester === '1st'),
-      '2nd Semester': availableCourses.filter(c => c.yearLevel === 3 && c.semester === '2nd'),
+      '1st Semester': availableCourses.filter(c => c.yearLevel === 3 && (c.semester === '1st' || c.semester === '1')),
+      '2nd Semester': availableCourses.filter(c => c.yearLevel === 3 && (c.semester === '2nd' || c.semester === '2')),
+      'Summer Term': availableCourses.filter(c => c.yearLevel === 3 && (c.semester === 'Summer' || c.semester === '3rd' || c.semester === '3')),
     },
     4: {
-      '1st Semester': availableCourses.filter(c => c.yearLevel === 4 && c.semester === '1st'),
-      '2nd Semester': availableCourses.filter(c => c.yearLevel === 4 && c.semester === '2nd'),
+      '1st Semester': availableCourses.filter(c => c.yearLevel === 4 && (c.semester === '1st' || c.semester === '1')),
+      '2nd Semester': availableCourses.filter(c => c.yearLevel === 4 && (c.semester === '2nd' || c.semester === '2')),
+      'Summer Term': availableCourses.filter(c => c.yearLevel === 4 && (c.semester === 'Summer' || c.semester === '3rd' || c.semester === '3')),
     },
     5: {
-      '1st Semester (Extended)': scheduleResult?.blockedPool?.filter(b => b.yearLevel >= 4) || [],
-      '2nd Semester (Extended)': [],
+      '1st Semester': scheduleResult?.blockedPool?.filter(b => b.yearLevel >= 4) || [],
+      '2nd Semester': [],
+      'Summer Term': [],
     }
   };
 
-  const currentYearData = coursesByYear[activeYearTab] || { '1st Semester': [], '2nd Semester': [] };
-  const sem1Title = activeYearTab === 5 ? '1st Semester (Extended)' : '1st Semester';
-  const sem2Title = activeYearTab === 5 ? '2nd Semester (Extended)' : '2nd Semester';
+  const currentYearData = coursesByYear[activeYearTab] || { '1st Semester': [], '2nd Semester': [], 'Summer Term': [] };
+  const hasSummerCourses = currentYearData['Summer Term'] && currentYearData['Summer Term'].length > 0;
 
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
@@ -157,7 +161,7 @@ export default function ProspectusProcessor({ user }) {
               <BookOpen className="w-4 h-4 text-slate-400" />
             </div>
             <h3 className="text-base font-bold">Show standard prospectus</h3>
-            <p className="text-xs text-slate-500 font-normal">View the regular 4-year course catalog for your degree.</p>
+            <p className="text-xs text-slate-500 font-normal">View the regular course catalog (1st Sem, 2nd Sem & Summer) for your degree.</p>
           </div>
 
         </div>
@@ -174,7 +178,7 @@ export default function ProspectusProcessor({ user }) {
               <h2 className="text-base font-bold text-slate-900">Custom Recalculated Prospectus Active</h2>
               <p className="text-xs text-slate-500">
                 {failedCourses.length > 0 
-                  ? `Recalculated full 4-year flow to resolve failed subject(s): ${failedCourses.join(', ')}` 
+                  ? `Recalculated full flow to resolve failed subject(s): ${failedCourses.join(', ')}` 
                   : 'Displaying standard 4-year curriculum path'}
               </p>
             </div>
@@ -212,7 +216,7 @@ export default function ProspectusProcessor({ user }) {
             <h2 className="text-base font-bold text-slate-900">
               {hasGeneratedPlan ? `Recalculated BS ${program} Prospectus` : `Full BS ${program} Prospectus`}
             </h2>
-            <p className="text-xs text-slate-500">Select year tab to view both semesters in one screen</p>
+            <p className="text-xs text-slate-500">Select year tab to view 1st Sem, 2nd Sem, and Summer in one screen</p>
           </div>
 
           {/* Circular Year Level Drawer Tabs */}
@@ -233,25 +237,23 @@ export default function ProspectusProcessor({ user }) {
           </div>
         </div>
 
-        {/* SINGLE VIEW GRID: 1st Semester & 2nd Semester Side-by-Side */}
-        <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-fadeIn">
+        {/* SINGLE VIEW GRID: 1st Sem, 2nd Sem & Summer Term Side-by-Side */}
+        <div className={`grid grid-cols-1 ${hasSummerCourses ? 'lg:grid-cols-3' : 'lg:grid-cols-2'} gap-6 animate-fadeIn`}>
           
           {/* 1st Semester Card */}
           <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                Year {activeYearTab} • {sem1Title}
-              </span>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-900">Year {activeYearTab} • 1st Semester</span>
               <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
-                {(currentYearData[sem1Title] || []).reduce((sum, c) => sum + c.units, 0).toFixed(1)} Total Units
+                {(currentYearData['1st Semester'] || []).reduce((sum, c) => sum + c.units, 0).toFixed(1)} Total Units
               </span>
             </div>
 
             <div className="space-y-2.5">
-              {(!currentYearData[sem1Title] || currentYearData[sem1Title].length === 0) ? (
-                <p className="text-center py-6 text-slate-400 text-xs">No courses scheduled for this semester.</p>
+              {(!currentYearData['1st Semester'] || currentYearData['1st Semester'].length === 0) ? (
+                <p className="text-center py-6 text-slate-400 text-xs">No courses scheduled.</p>
               ) : (
-                currentYearData[sem1Title].map(c => {
+                currentYearData['1st Semester'].map(c => {
                   const state = dagStateMap.get(c.code);
                   const isFailed = failedCourses.includes(c.code);
                   const isEnrolled = scheduleResult?.packedSchedule?.some(ps => ps.code === c.code);
@@ -262,7 +264,6 @@ export default function ProspectusProcessor({ user }) {
                         <div className="flex items-center space-x-2">
                           <span className="font-bold text-xs text-slate-900">{c.code}</span>
                           
-                          {/* Recalculated Status Badges */}
                           {hasGeneratedPlan && isFailed && (
                             <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
                               Must Retake
@@ -295,19 +296,17 @@ export default function ProspectusProcessor({ user }) {
           {/* 2nd Semester Card */}
           <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card space-y-4">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-              <span className="text-xs font-bold uppercase tracking-wider text-slate-900">
-                Year {activeYearTab} • {sem2Title}
-              </span>
+              <span className="text-xs font-bold uppercase tracking-wider text-slate-900">Year {activeYearTab} • 2nd Semester</span>
               <span className="text-[11px] font-semibold text-slate-500 bg-slate-100 px-2.5 py-0.5 rounded-full">
-                {(currentYearData[sem2Title] || []).reduce((sum, c) => sum + c.units, 0).toFixed(1)} Total Units
+                {(currentYearData['2nd Semester'] || []).reduce((sum, c) => sum + c.units, 0).toFixed(1)} Total Units
               </span>
             </div>
 
             <div className="space-y-2.5">
-              {(!currentYearData[sem2Title] || currentYearData[sem2Title].length === 0) ? (
-                <p className="text-center py-6 text-slate-400 text-xs">No courses scheduled for this semester.</p>
+              {(!currentYearData['2nd Semester'] || currentYearData['2nd Semester'].length === 0) ? (
+                <p className="text-center py-6 text-slate-400 text-xs">No courses scheduled.</p>
               ) : (
-                currentYearData[sem2Title].map(c => {
+                currentYearData['2nd Semester'].map(c => {
                   const state = dagStateMap.get(c.code);
                   const isFailed = failedCourses.includes(c.code);
                   const isEnrolled = scheduleResult?.packedSchedule?.some(ps => ps.code === c.code);
@@ -318,7 +317,6 @@ export default function ProspectusProcessor({ user }) {
                         <div className="flex items-center space-x-2">
                           <span className="font-bold text-xs text-slate-900">{c.code}</span>
                           
-                          {/* Recalculated Status Badges */}
                           {hasGeneratedPlan && isFailed && (
                             <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
                               Must Retake
@@ -347,6 +345,36 @@ export default function ProspectusProcessor({ user }) {
               )}
             </div>
           </div>
+
+          {/* Summer Term Card (If Summer courses exist for this Year) */}
+          {hasSummerCourses && (
+            <div className="bg-amber-50/40 rounded-3xl border border-amber-200/60 p-6 shadow-card space-y-4">
+              <div className="flex items-center justify-between pb-3 border-b border-amber-100">
+                <span className="text-xs font-bold uppercase tracking-wider text-amber-900 flex items-center space-x-1.5">
+                  <Sun className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Year {activeYearTab} • Summer Term</span>
+                </span>
+                <span className="text-[11px] font-semibold text-amber-800 bg-amber-100/80 px-2.5 py-0.5 rounded-full">
+                  {(currentYearData['Summer Term'] || []).reduce((sum, c) => sum + c.units, 0).toFixed(1)} Total Units
+                </span>
+              </div>
+
+              <div className="space-y-2.5">
+                {currentYearData['Summer Term'].map(c => (
+                  <div key={c.code} className="p-3.5 rounded-2xl border border-amber-200/60 bg-white flex items-center justify-between hover:border-amber-300 transition-colors">
+                    <div className="space-y-0.5">
+                      <span className="font-bold text-xs text-slate-900">{c.code}</span>
+                      <p className="text-xs text-slate-600 font-normal">{c.title}</p>
+                    </div>
+
+                    <span className="text-[11px] font-semibold text-amber-800 bg-amber-50 px-2.5 py-0.5 rounded-full border border-amber-200/60 shrink-0 ml-2">
+                      {Number(c.units).toFixed(1)}
+                    </span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          )}
 
         </div>
 
