@@ -6,6 +6,10 @@ node_modules/
 # Ignore client frontend node modules
 client/node_modules/
 
+# Private seed data directory
+private_data/
+data/seedData/
+
 # dependencies
 /.pnp
 .pnp.js

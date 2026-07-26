@@ -1,63 +1,59 @@
-require('dotenv').config(); // 1. Load hidden credentials from .env first
+require('dotenv').config();
 
 const express = require('express');
-const { MongoClient, ServerApiVersion } = require('mongodb');
-const path = require('path'); // <-- 1. Require path module
+const cors = require('cors');
+const mongoose = require('mongoose');
+const path = require('path');
+const prospectusRoutes = require('./routes/prospectus');
 
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Middleware to parse incoming JSON data from your React frontend
+// Enable CORS & JSON parsing
+app.use(cors());
 app.use(express.json());
 
-// 2. Safely grab credentials and database name from environment variables
-const dbUser = process.env.DB_USER;
-const dbPass = process.env.DB_PASS;
-const dbName = process.env.DB_NAME;
+// Database Connection URI
+const dbUser = process.env.DB_USER || '';
+const dbPass = process.env.DB_PASS || '';
+const dbName = process.env.DB_NAME || 'semestral_flow';
 
-const uri = `mongodb://${dbUser}:${dbPass}@localhost:27017/${dbName}`;
+const mongoUri = process.env.MONGODB_URI || (
+  dbUser && dbPass 
+    ? `mongodb://${dbUser}:${dbPass}@localhost:27017/${dbName}`
+    : `mongodb://localhost:27017/${dbName}`
+);
 
-const client = new MongoClient(uri, {
-    serverApi: {
-        version: ServerApiVersion.v1,
-        strict: true,
-        deprecationErrors: true,
-    }
+// Connect Mongoose with Graceful Fallback
+mongoose.connect(mongoUri, {
+  serverSelectionTimeoutMS: 3000
+}).then(() => {
+  console.log('✅ Connected successfully to DCISM MongoDB database via Mongoose.');
+}).catch(err => {
+  console.warn('⚠️ Could not connect to MongoDB directly. Using memory/seed fallback for API operations:', err.message);
 });
 
-async function startServer() {
-    try {
-        // 3. Connect to the DCISM database server via your SSH tunnel
-        await client.connect();
-        await client.db("admin").command({ ping: 1 });
-        console.log("Successfully connected and pinged DCISM MongoDB!");
+// Health check route
+app.get('/api/health', (req, res) => {
+  res.json({
+    status: 'Backend is running live!',
+    dbStatus: mongoose.connection.readyState === 1 ? 'Connected' : 'Fallback Mode',
+    timestamp: new Date().toISOString()
+  });
+});
 
-        // Attach database instance to the app so your routes can use it later
-        app.locals.db = client.db(dbName);
+// Mount Prospectus & DAG Engine Routes
+app.use('/api', prospectusRoutes);
 
-        // 4. Test API Route (Keep this for backend checking)
-        app.get('/api/health', (req, res) => {
-            res.json({ status: 'Backend is running!' });
-        });
-
-        // ==========================================
-        // 5. SERVE REACT FRONTEND IN PRODUCTION
-        // ==========================================
-        app.use(express.static(path.join(__dirname, 'client/build')));
-
-        // Use a safe regex catch-all route that handles React routing 
-        // without conflicting with express router path-to-regexp parsing
-        app.get(/^(?!\/api).+/, (req, res) => {
-            res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
-        });
-
-        // 6. Start the Express server
-        app.listen(PORT, () => {
-            console.log(`Backend server is running live on port ${PORT}`);
-        });
-    } catch (error) {
-        console.error("Failed to connect to database:", error);
-    }
+// Serve Static React Frontend Production Build
+if (process.env.NODE_ENV === 'production' || require('fs').existsSync(path.join(__dirname, 'client/build'))) {
+  app.use(express.static(path.join(__dirname, 'client/build')));
+  app.get(/^(?!\/api).+/, (req, res) => {
+    res.sendFile(path.join(__dirname, 'client/build', 'index.html'));
+  });
 }
 
-startServer();
+// Start Server
+app.listen(PORT, () => {
+  console.log(`🚀 Semestral Flow backend server running live on port ${PORT}`);
+});
