@@ -3,8 +3,9 @@ const Course = require('../models/Course');
 const mongoose = require('mongoose');
 
 /**
- * Core 3-Step Directed Acyclic Graph (DAG) Multi-Term Prospectus Regeneration Engine
- * Enforces strict term caps (21 units max for 1st/2nd sem, 9 units max for Summer).
+ * Core Directed Acyclic Graph (DAG) Prospectus Generator
+ * Recalculates full multi-year prospectus replacing locked major slots with Minors/GEs,
+ * placing retakes in their eligible sem, and shifting delayed major chains into future/extended terms.
  */
 async function generateProspectusSchedule({
   program = 'IT',
@@ -33,7 +34,7 @@ async function generateProspectusSchedule({
   const passedSet = new Set(passedCourses);
   const failedSet = new Set(failedCourses);
 
-  // Define full multi-year terms sequence
+  // Full multi-year terms simulation sequence
   const termsSequence = [
     { yearLevel: 1, semester: '1st', label: 'Year 1 • 1st Semester', maxUnits: 21 },
     { yearLevel: 1, semester: '2nd', label: 'Year 1 • 2nd Semester', maxUnits: 21 },
@@ -55,30 +56,32 @@ async function generateProspectusSchedule({
     { yearLevel: 5, semester: '2nd', label: 'Year 5 • 2nd Semester (Extended)', maxUnits: 21 },
   ];
 
-  // Track completed courses dynamically as we simulate term-by-term
+  // Dynamically track completed courses as we simulate term-by-term
   const currentCompleted = new Set([...passedSet].filter(c => !failedSet.has(c)));
   const pendingFailedRetakes = new Set(failedSet);
   const remainingCourses = new Set(allCourses.map(c => c.code));
   
-  // Remove already completed courses
+  // Exclude completed subjects
   currentCompleted.forEach(code => remainingCourses.delete(code));
 
   const regeneratedTerms = [];
+  let maxScheduledYear = 4;
+  let hasExtendedTerms = false;
 
   for (const termInfo of termsSequence) {
     if (remainingCourses.size === 0 && pendingFailedRetakes.size === 0) {
-      break; // All courses completed!
+      break; // 100% of curriculum courses scheduled!
     }
 
     const isSummerTerm = termInfo.semester === 'Summer';
-    const termMaxUnits = isSummerTerm ? 9 : 21;
+    const termMaxUnits = termInfo.maxUnits;
 
     let termUnits = 0;
     const termScheduled = [];
     const passedThisTerm = [];
 
     // -----------------------------------------------------------------------
-    // PRIORITY 1: Retake Failed Courses First
+    // STEP 1: Retake Failed Subjects (First Priority in earliest eligible term)
     // -----------------------------------------------------------------------
     for (const failedCode of Array.from(pendingFailedRetakes)) {
       const course = courseMap.get(failedCode);
@@ -102,17 +105,15 @@ async function generateProspectusSchedule({
     }
 
     // -----------------------------------------------------------------------
-    // PRIORITY 2: Regular Term Courses (Strict Semester Match)
+    // STEP 2: Regular Curriculum Subjects (Prerequisites Met)
     // -----------------------------------------------------------------------
     if (!isSummerTerm) {
       const regularTermCandidates = Array.from(remainingCourses)
         .map(code => courseMap.get(code))
         .filter(c => {
           if (!c) return false;
-          // Exact year & semester match OR earlier year same semester
-          const isYearAndSemMatch = (c.yearLevel === termInfo.yearLevel && (c.semester === termInfo.semester || c.semester === '1st' || c.semester === '2nd'));
-          const isEarlierYear = c.yearLevel < termInfo.yearLevel;
-          return isYearAndSemMatch || isEarlierYear;
+          // Matches current year/sem or earlier year whose prerequisites are now cleared
+          return c.yearLevel <= termInfo.yearLevel;
         });
 
       for (const course of regularTermCandidates) {
@@ -125,8 +126,8 @@ async function generateProspectusSchedule({
             ...course,
             yearLevel: termInfo.yearLevel,
             semester: termInfo.semester,
-            status: 'regular_scheduled',
-            statusLabel: 'Regular Schedule',
+            status: course.yearLevel < termInfo.yearLevel ? 'delayed_unlocked' : 'regular_scheduled',
+            statusLabel: course.yearLevel < termInfo.yearLevel ? 'Delayed Subject (Unlocked)' : 'Regular Schedule',
             isReplacement: false
           });
           passedThisTerm.push(course.code);
@@ -134,7 +135,7 @@ async function generateProspectusSchedule({
         }
       }
     } else {
-      // For Summer terms: Only schedule explicit Summer subjects (like Practicum) or small retakes
+      // Summer Term: Only schedule explicit Summer subjects or small retakes (max 9u)
       const summerCandidates = Array.from(remainingCourses)
         .map(code => courseMap.get(code))
         .filter(c => c && (c.semester === 'Summer' || c.semester === '3rd' || c.semester === '3') && c.yearLevel <= termInfo.yearLevel);
@@ -159,19 +160,21 @@ async function generateProspectusSchedule({
     }
 
     // -----------------------------------------------------------------------
-    // PRIORITY 3: Slot Replacements (Pull Forward Minors / GE in Regular Terms Only)
+    // STEP 3: Slot Replacements (Pull Forward Minors / GEs into Freed Slots)
     // -----------------------------------------------------------------------
+    // If unit capacity is remaining because a major course was locked by a failed prerequisite,
+    // fill the slot with eligible Minor/GE subjects or higher-year subjects with no prereqs!
     if (!isSummerTerm && termUnits < termMaxUnits && remainingCourses.size > 0) {
       const replacementCandidates = Array.from(remainingCourses)
         .map(code => courseMap.get(code))
         .filter(c => {
           if (!c) return false;
-          // Do not pull explicit Summer courses into regular terms
           if (c.semester === 'Summer' || c.semester === '3rd') return false;
           const prereqsMet = (c.prerequisites || []).every(pre => currentCompleted.has(pre));
           return prereqsMet;
         })
         .sort((a, b) => {
+          // Prioritize Minors, GE, PE, NSTP
           const isAMinor = a.code.startsWith('GE-') || a.code.startsWith('NSTP') || a.code.startsWith('TPE') || a.code.startsWith('EDM');
           const isBMinor = b.code.startsWith('GE-') || b.code.startsWith('NSTP') || b.code.startsWith('TPE') || b.code.startsWith('EDM');
           if (isAMinor && !isBMinor) return -1;
@@ -203,6 +206,11 @@ async function generateProspectusSchedule({
     passedThisTerm.forEach(code => currentCompleted.add(code));
 
     if (termScheduled.length > 0) {
+      if (termInfo.yearLevel > 4) {
+        hasExtendedTerms = true;
+      }
+      maxScheduledYear = Math.max(maxScheduledYear, termInfo.yearLevel);
+
       regeneratedTerms.push({
         yearLevel: termInfo.yearLevel,
         semester: termInfo.semester,
@@ -214,15 +222,9 @@ async function generateProspectusSchedule({
     }
   }
 
-  // Critical path warnings
-  const criticalPathWarnings = Array.from(failedSet).map(code => {
-    const course = courseMap.get(code);
-    return {
-      code,
-      title: course?.title || code,
-      message: `[${code}] was marked failed. Locked downstream prerequisites were automatically replaced with eligible minor/GE subjects, and major retakes were rescheduled.`
-    };
-  });
+  // Calculate graduation timeline summary
+  const totalTerms = regeneratedTerms.filter(t => t.semester !== 'Summer').length;
+  const extraSemesters = hasExtendedTerms ? (totalTerms - 8) : 0;
 
   return {
     program,
@@ -232,8 +234,14 @@ async function generateProspectusSchedule({
     totalScheduledUnits: regeneratedTerms[0]?.totalUnits || 0,
     packedSchedule: regeneratedTerms[0]?.courses || [],
     regeneratedTerms,
-    blockedPool: [],
-    criticalPathWarnings,
+    hasExtendedTerms,
+    extraSemesters,
+    graduationSummary: {
+      estimatedYears: hasExtendedTerms ? (4 + extraSemesters * 0.5) : 4,
+      statusMessage: hasExtendedTerms 
+        ? `Extended Graduation: 4.${extraSemesters * 5} Years (+${extraSemesters} Extra Semester needed)`
+        : 'On Track for 4-Year Graduation'
+    },
     dagNodes: allCourses.map(c => ({
       id: c.code,
       title: c.title,

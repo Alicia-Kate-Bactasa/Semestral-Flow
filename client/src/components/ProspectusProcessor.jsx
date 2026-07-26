@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useCallback } from 'react';
-import { Search, Check, Sparkles, ArrowRight, RotateCcw, BookOpen, AlertCircle, CheckCircle2, RefreshCw } from 'lucide-react';
+import { Search, Check, Sparkles, ArrowRight, RotateCcw, BookOpen, AlertCircle, CheckCircle2, RefreshCw, Calendar, Clock } from 'lucide-react';
 
 export default function ProspectusProcessor({ user }) {
   const [program, setProgram] = useState(user?.program || 'IT');
@@ -112,6 +112,8 @@ export default function ProspectusProcessor({ user }) {
   const summerCourses = getCoursesForYearAndSem(activeYearTab, 'Summer Term');
   const hasSummerCourses = summerCourses.length > 0;
 
+  const summary = scheduleResult?.graduationSummary || {};
+
   return (
     <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-8 space-y-8">
       
@@ -142,7 +144,7 @@ export default function ProspectusProcessor({ user }) {
               <Sparkles className="w-4 h-4 text-brand-400 group-hover:scale-110 transition-transform" />
             </div>
             <h3 className="text-base font-bold">I failed / missed a subject</h3>
-            <p className="text-xs text-slate-300 font-normal">Tell us what you missed and we'll generate a new prospectus replacing locked slots with eligible minors.</p>
+            <p className="text-xs text-slate-300 font-normal">Tell us what you missed and we'll generate your custom prospectus from Year 1 to graduation.</p>
           </div>
 
           {/* Option B: Standard Prospectus */}
@@ -161,30 +163,50 @@ export default function ProspectusProcessor({ user }) {
         </div>
       </div>
 
-      {/* RECALCULATED PLAN SUMMARY BANNER (If plan generated) */}
+      {/* RECALCULATED PLAN SUMMARY & GRADUATION IMPACT BANNER */}
       {hasGeneratedPlan && (
-        <div className="bg-white rounded-3xl border border-slate-200/80 p-6 shadow-card flex flex-col sm:flex-row sm:items-center justify-between gap-4 animate-fadeIn">
-          <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center shrink-0">
-              <CheckCircle2 className="w-5 h-5" />
+        <div className="space-y-4 animate-fadeIn">
+          
+          {/* Main Graduation Impact Alert Card */}
+          <div className={`rounded-3xl p-6 border shadow-card flex flex-col md:flex-row md:items-center justify-between gap-4 ${
+            scheduleResult?.hasExtendedTerms 
+              ? 'bg-amber-50/60 border-amber-200' 
+              : 'bg-emerald-50/60 border-emerald-200'
+          }`}>
+            <div className="flex items-start space-x-3.5">
+              <div className={`w-10 h-10 rounded-full flex items-center justify-center shrink-0 mt-0.5 ${
+                scheduleResult?.hasExtendedTerms ? 'bg-amber-100 text-amber-800' : 'bg-emerald-100 text-emerald-800'
+              }`}>
+                {scheduleResult?.hasExtendedTerms ? <Clock className="w-5 h-5" /> : <CheckCircle2 className="w-5 h-5" />}
+              </div>
+              <div className="space-y-1">
+                <div className="flex items-center space-x-2">
+                  <span className={`text-xs font-bold px-3 py-0.5 rounded-full border ${
+                    scheduleResult?.hasExtendedTerms ? 'bg-amber-100 text-amber-900 border-amber-300' : 'bg-emerald-100 text-emerald-900 border-emerald-300'
+                  }`}>
+                    {summary.statusMessage || 'Graduation Plan Calculated'}
+                  </span>
+                </div>
+                <h2 className="text-base font-bold text-slate-900">
+                  {scheduleResult?.hasExtendedTerms 
+                    ? `Failing ${failedCourses.join(', ')} extends graduation to Year 5 (${summary.estimatedYears} Years total)`
+                    : 'Your 4-Year Graduation Plan is Ready!'}
+                </h2>
+                <p className="text-xs text-slate-600">
+                  Locked major slots were replaced with eligible Minor/GE subjects. Retakes and delayed subjects are scheduled into their valid future terms below.
+                </p>
+              </div>
             </div>
-            <div>
-              <h2 className="text-base font-bold text-slate-900">New Recalculated Prospectus Generated!</h2>
-              <p className="text-xs text-slate-500">
-                {failedCourses.length > 0 
-                  ? `Replaced locked course slots with eligible Minor/GE subjects to resolve: ${failedCourses.join(', ')}` 
-                  : 'Displaying standard 4-year curriculum path'}
-              </p>
-            </div>
+
+            <button
+              onClick={() => setIsWizardOpen(true)}
+              className="px-5 py-2.5 bg-white hover:bg-slate-50 text-slate-900 font-semibold rounded-full text-xs shadow-subtle border border-slate-200 transition-colors shrink-0 flex items-center space-x-1.5"
+            >
+              <RotateCcw className="w-3.5 h-3.5" />
+              <span>Modify Failed Courses</span>
+            </button>
           </div>
 
-          <button
-            onClick={() => setIsWizardOpen(true)}
-            className="px-4 py-2 bg-slate-100 hover:bg-slate-200 text-slate-800 font-semibold rounded-full text-xs transition-colors flex items-center space-x-1.5 shrink-0"
-          >
-            <RotateCcw className="w-3.5 h-3.5" />
-            <span>Modify Failed Courses</span>
-          </button>
         </div>
       )}
 
@@ -242,16 +264,21 @@ export default function ProspectusProcessor({ user }) {
                       <div className="flex items-center space-x-2">
                         <span className="font-bold text-xs text-slate-900">{c.code}</span>
                         
-                        {/* Dynamic Status Badges for Replaced/Pulled-Forward/Retake */}
+                        {/* Dynamic Status Badges */}
                         {c.status === 'retake_required' && (
                           <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
-                            Must Retake
+                            Must Retake First
                           </span>
                         )}
                         {c.status === 'minor_replaced' && (
                           <span className="text-[10px] font-bold text-brand-700 bg-brand-50 border border-brand-200 px-2 py-0.5 rounded-full flex items-center space-x-1">
                             <RefreshCw className="w-2.5 h-2.5" />
                             <span>Replaced with Minor</span>
+                          </span>
+                        )}
+                        {c.status === 'delayed_unlocked' && (
+                          <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                            Rescheduled Subject
                           </span>
                         )}
                         {c.status === 'pulled_forward' && (
@@ -293,16 +320,21 @@ export default function ProspectusProcessor({ user }) {
                       <div className="flex items-center space-x-2">
                         <span className="font-bold text-xs text-slate-900">{c.code}</span>
                         
-                        {/* Dynamic Status Badges for Replaced/Pulled-Forward/Retake */}
+                        {/* Dynamic Status Badges */}
                         {c.status === 'retake_required' && (
                           <span className="text-[10px] font-bold text-rose-700 bg-rose-50 border border-rose-200 px-2 py-0.5 rounded-full">
-                            Must Retake
+                            Must Retake First
                           </span>
                         )}
                         {c.status === 'minor_replaced' && (
                           <span className="text-[10px] font-bold text-brand-700 bg-brand-50 border border-brand-200 px-2 py-0.5 rounded-full flex items-center space-x-1">
                             <RefreshCw className="w-2.5 h-2.5" />
                             <span>Replaced with Minor</span>
+                          </span>
+                        )}
+                        {c.status === 'delayed_unlocked' && (
+                          <span className="text-[10px] font-semibold text-amber-800 bg-amber-50 border border-amber-200 px-2 py-0.5 rounded-full">
+                            Rescheduled Subject
                           </span>
                         )}
                         {c.status === 'pulled_forward' && (
