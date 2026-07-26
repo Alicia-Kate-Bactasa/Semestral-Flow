@@ -259,7 +259,7 @@ export default function App() {
     <div className="min-h-screen bg-slate-50 dark:bg-slate-950 text-slate-800 dark:text-slate-100 flex flex-col justify-center items-center p-4 sm:p-6 transition-colors duration-200">
       
       {/* Top Header */}
-      <div className="w-full max-w-2xl flex items-center justify-between mb-6">
+      <div className="w-full max-w-5xl flex items-center justify-between mb-6">
         <div className="flex items-center space-x-2">
           <div className="w-8 h-8 rounded-xl bg-brand-500 text-white font-black text-xs flex items-center justify-center shadow-glow">
             SF
@@ -277,13 +277,13 @@ export default function App() {
         </button>
       </div>
 
-      {/* Main Single Centered Card Container */}
-      <div className="w-full max-w-2xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-card p-6 sm:p-8 space-y-6 transition-all">
+      {/* Main Spacious Centered Card Container (max-w-5xl) */}
+      <div className="w-full max-w-5xl bg-white dark:bg-slate-900 border border-slate-200/80 dark:border-slate-800 rounded-3xl shadow-card p-6 sm:p-8 space-y-6 transition-all">
         
         {/* Step Progress Bar */}
         <div className="flex items-center justify-between border-b border-slate-100 dark:border-slate-800 pb-4">
           <div className="flex items-center space-x-2">
-            <span className="text-[11px] font-bold uppercase tracking-wider text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/40 px-3 py-1 rounded-full">
+            <span className="text-[11px] font-bold uppercase tracking-wider text-brand-600 dark:text-brand-400 bg-brand-50 dark:bg-brand-950/40 px-3.5 py-1.5 rounded-full">
               {step === 1 && 'Step 1 of 3: Program Selection'}
               {step === 2 && 'Step 2 of 3: History Audit'}
               {step === 3 && 'Step 3 of 3: Your New Prospectus'}
@@ -297,17 +297,17 @@ export default function App() {
 
         {/* STEP 1: SIMPLE PROGRAM SELECTION */}
         {step === 1 && (
-          <div className="space-y-6 text-center animate-fadeIn">
+          <div className="space-y-6 text-center animate-fadeIn py-6">
             <div>
-              <h1 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
+              <h1 className="text-2xl sm:text-3xl font-black text-slate-900 dark:text-white">
                 What is your degree program?
               </h1>
-              <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+              <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-2">
                 Select your major to load your official curriculum prospectus.
               </p>
             </div>
 
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 pt-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 pt-4 max-w-3xl mx-auto">
               {[
                 { id: 'IT', label: 'BS-IT', name: 'Information Technology' },
                 { id: 'CS', label: 'BS-CS', name: 'Computer Science' },
@@ -316,12 +316,12 @@ export default function App() {
                 <button
                   key={p.id}
                   onClick={() => handleSelectProgram(p.id)}
-                  className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 dark:hover:border-brand-500 bg-slate-50/50 dark:bg-slate-850 hover:bg-brand-50/50 dark:hover:bg-brand-950/20 text-center transition-all group shadow-sm hover:shadow-md"
+                  className="p-6 rounded-3xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 dark:hover:border-brand-500 bg-slate-50/50 dark:bg-slate-850 hover:bg-brand-50/50 dark:hover:bg-brand-950/20 text-center transition-all group shadow-sm hover:shadow-md"
                 >
-                  <span className="text-base font-black text-slate-900 dark:text-white group-hover:text-brand-600 block">
+                  <span className="text-xl font-black text-slate-900 dark:text-white group-hover:text-brand-600 block">
                     {p.label}
                   </span>
-                  <span className="text-[11px] text-slate-500 dark:text-slate-400 mt-1 block">
+                  <span className="text-xs text-slate-500 dark:text-slate-400 mt-1 block">
                     {p.name}
                   </span>
                 </button>
@@ -336,7 +336,7 @@ export default function App() {
             
             {/* Sub-Step A: Semester Count Choice */}
             {!hasChosenSemCount ? (
-              <div className="space-y-6 text-center">
+              <div className="space-y-6 text-center py-6">
                 <div className="flex items-center justify-between">
                   <button
                     onClick={() => setStep(1)}
@@ -348,25 +348,25 @@ export default function App() {
                 </div>
 
                 <div>
-                  <h2 className="text-xl font-black text-slate-900 dark:text-white">
+                  <h2 className="text-2xl font-black text-slate-900 dark:text-white">
                     How many semesters have you completed so far?
                   </h2>
-                  <p className="text-xs text-slate-500 dark:text-slate-400 mt-1">
+                  <p className="text-xs sm:text-sm text-slate-500 dark:text-slate-400 mt-1">
                     Selected Program: <strong className="text-slate-800 dark:text-slate-200">BS {program}</strong>
                   </p>
                 </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 pt-2">
+                <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 pt-4 max-w-3xl mx-auto">
                   {[1, 2, 3, 4, 5, 6, 7, 8].map((count) => (
                     <button
                       key={count}
                       onClick={() => handleSelectSemesters(count)}
-                      className="p-4 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 bg-slate-50 dark:bg-slate-850 hover:bg-brand-50 dark:hover:bg-brand-950/30 text-center transition-all"
+                      className="p-5 rounded-2xl border border-slate-200 dark:border-slate-800 hover:border-brand-500 bg-slate-50 dark:bg-slate-850 hover:bg-brand-50 dark:hover:bg-brand-950/30 text-center transition-all shadow-sm hover:shadow-md"
                     >
-                      <span className="text-lg font-black text-slate-900 dark:text-white block">
+                      <span className="text-xl font-black text-slate-900 dark:text-white block">
                         {count}
                       </span>
-                      <span className="text-[10px] text-slate-400 block font-medium">
+                      <span className="text-xs text-slate-400 block font-medium mt-0.5">
                         {TERM_NAMES[count - 1]?.split('•')[1] || `Semesters`}
                       </span>
                     </button>
@@ -378,10 +378,10 @@ export default function App() {
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <div>
-                    <span className="text-[10px] font-bold uppercase tracking-wider text-brand-600 dark:text-brand-400">
+                    <span className="text-[11px] font-bold uppercase tracking-wider text-brand-600 dark:text-brand-400">
                       Semester Audit {auditTermIndex + 1} of {semestersCount}
                     </span>
-                    <h2 className="text-lg font-black text-slate-900 dark:text-white">
+                    <h2 className="text-xl font-black text-slate-900 dark:text-white mt-0.5">
                       {currentTermLabel}
                     </h2>
                   </div>
@@ -390,16 +390,16 @@ export default function App() {
                     <button
                       type="button"
                       onClick={() => handlePassAllStandardCourses(auditTermIndex)}
-                      className="flex items-center space-x-1 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold rounded-xl transition-all"
+                      className="flex items-center space-x-1 px-3.5 py-2 bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300 border border-emerald-200 dark:border-emerald-800 text-xs font-bold rounded-xl transition-all"
                     >
                       <CheckCircle2 className="w-3.5 h-3.5" />
-                      <span>Pass All Standard</span>
+                      <span>Pass All Standard Courses</span>
                     </button>
 
                     <button
                       type="button"
                       onClick={() => { setSelectedModalCourses([]); setShowAddCourseModal(true); }}
-                      className="flex items-center space-x-1 px-3.5 py-1.5 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+                      className="flex items-center space-x-1 px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
                     >
                       <Plus className="w-3.5 h-3.5" />
                       <span>Select Courses</span>
@@ -411,22 +411,22 @@ export default function App() {
                   Select and mark what you <strong>actually took and passed/failed</strong> in this semester:
                 </p>
 
-                <div className="space-y-2.5 max-h-[350px] overflow-y-auto pr-1">
+                <div className="space-y-3 max-h-[420px] overflow-y-auto pr-1">
                   {activeTermCourses.length === 0 ? (
-                    <div className="p-8 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-2xl text-center space-y-3">
-                      <p className="text-xs text-slate-400 font-medium">No courses added for this semester yet.</p>
+                    <div className="p-10 border-2 border-dashed border-slate-200 dark:border-slate-800 rounded-3xl text-center space-y-3">
+                      <p className="text-xs sm:text-sm text-slate-400 font-medium">No courses added for this semester yet.</p>
                       <div className="flex items-center justify-center space-x-3">
                         <button
                           type="button"
                           onClick={() => { setSelectedModalCourses([]); setShowAddCourseModal(true); }}
-                          className="px-4 py-2 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
+                          className="px-5 py-2.5 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold rounded-xl transition-all shadow-sm"
                         >
                           + Select & Add Courses
                         </button>
                         <button
                           type="button"
                           onClick={() => handlePassAllStandardCourses(auditTermIndex)}
-                          className="px-4 py-2 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 text-xs font-bold rounded-xl transition-all"
+                          className="px-5 py-2.5 bg-emerald-50 text-emerald-700 dark:bg-emerald-950/40 dark:text-emerald-300 border border-emerald-200 text-xs font-bold rounded-xl transition-all"
                         >
                           Pass All Standard Courses
                         </button>
@@ -440,7 +440,7 @@ export default function App() {
                       return (
                         <div
                           key={course.code}
-                          className={`p-3.5 rounded-2xl border transition-all flex items-center justify-between ${
+                          className={`p-4 rounded-2xl border transition-all flex items-center justify-between ${
                             isPassed
                               ? 'bg-emerald-50/80 dark:bg-emerald-950/30 border-emerald-300 dark:border-emerald-800'
                               : (isFailed
@@ -448,20 +448,20 @@ export default function App() {
                                   : 'bg-slate-50 dark:bg-slate-850 border-slate-200 dark:border-slate-800')
                           }`}
                         >
-                          <div className="pr-2 min-w-0">
-                            <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                          <div className="pr-4 min-w-0">
+                            <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white block">
                               {course.code} ({course.units}u)
                             </span>
-                            <span className="text-[11px] text-slate-500 dark:text-slate-400 truncate block">
+                            <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
                               {course.title}
                             </span>
                           </div>
 
-                          <div className="flex items-center space-x-1.5 shrink-0">
+                          <div className="flex items-center space-x-2 shrink-0">
                             <button
                               type="button"
                               onClick={() => toggleCourseStatusInTerm(auditTermIndex, course.code, 'passed')}
-                              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
+                              className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all ${
                                 isPassed
                                   ? 'bg-emerald-500 text-white shadow-sm'
                                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-emerald-50 hover:text-emerald-600 border border-slate-200 dark:border-slate-700'
@@ -472,7 +472,7 @@ export default function App() {
                             <button
                               type="button"
                               onClick={() => toggleCourseStatusInTerm(auditTermIndex, course.code, 'failed')}
-                              className={`px-3 py-1.5 text-xs font-bold rounded-xl transition-all ${
+                              className={`px-3.5 py-1.5 text-xs font-bold rounded-xl transition-all ${
                                 isFailed
                                   ? 'bg-rose-500 text-white shadow-sm'
                                   : 'bg-white dark:bg-slate-800 text-slate-600 dark:text-slate-300 hover:bg-rose-50 hover:text-rose-600 border border-slate-200 dark:border-slate-700'
@@ -484,9 +484,9 @@ export default function App() {
                               type="button"
                               onClick={() => removeCourseFromTerm(auditTermIndex, course.code)}
                               title="Remove course from this term"
-                              className="p-1.5 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
+                              className="p-2 text-slate-400 hover:text-rose-500 hover:bg-rose-50 dark:hover:bg-rose-950/40 rounded-lg transition-colors"
                             >
-                              <Trash2 className="w-3.5 h-3.5" />
+                              <Trash2 className="w-4 h-4" />
                             </button>
                           </div>
                         </div>
@@ -495,7 +495,7 @@ export default function App() {
                   )}
                 </div>
 
-                <div className="pt-2 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
+                <div className="pt-3 flex items-center justify-between border-t border-slate-100 dark:border-slate-800">
                   {auditTermIndex > 0 ? (
                     <button
                       type="button"
@@ -518,7 +518,7 @@ export default function App() {
                     type="button"
                     onClick={handleNextAuditSemester}
                     disabled={loading}
-                    className="flex items-center space-x-2 px-6 py-2.5 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-brand-500/20"
+                    className="flex items-center space-x-2 px-7 py-3 bg-brand-500 hover:bg-brand-600 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-brand-500/20"
                   >
                     <span>{auditTermIndex < semestersCount - 1 ? 'Next Semester' : 'Calculate Prospectus'}</span>
                     <ChevronRight className="w-4 h-4" />
@@ -535,14 +535,14 @@ export default function App() {
           <div className="space-y-6 animate-fadeIn">
             
             {/* Top Summary Banner */}
-            <div className="p-5 bg-brand-500/10 border border-brand-500/20 rounded-2xl text-center space-y-1">
-              <span className="text-[10px] font-bold uppercase tracking-wider text-brand-600 dark:text-brand-400">
+            <div className="p-6 bg-brand-500/10 border border-brand-500/20 rounded-3xl text-center space-y-1.5">
+              <span className="text-[11px] font-bold uppercase tracking-wider text-brand-600 dark:text-brand-400">
                 Your Academic Result
               </span>
-              <h2 className="text-lg sm:text-xl font-black text-slate-900 dark:text-white">
+              <h2 className="text-xl sm:text-2xl font-black text-slate-900 dark:text-white">
                 Projected Graduation: {scheduleResult.graduationSummary.targetGraduationTerm}
               </h2>
-              <p className="text-xs text-brand-700 dark:text-brand-300 font-semibold">
+              <p className="text-xs sm:text-sm text-brand-700 dark:text-brand-300 font-semibold">
                 {scheduleResult.graduationSummary.statusMessage}
               </p>
             </div>
@@ -553,36 +553,36 @@ export default function App() {
                 Your Auto-Completed Remaining Schedule
               </h3>
 
-              <div className="space-y-4 max-h-[420px] overflow-y-auto pr-1">
+              <div className="space-y-4 max-h-[450px] overflow-y-auto pr-1">
                 {scheduleResult.regeneratedTerms
                   .filter(term => !term.isCompleted)
                   .map((term) => (
                     <div
                       key={term.id}
-                      className="p-4 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-2xl space-y-2.5"
+                      className="p-5 bg-slate-50 dark:bg-slate-850 border border-slate-200 dark:border-slate-800 rounded-3xl space-y-3"
                     >
-                      <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-2">
-                        <span className="text-xs font-bold text-slate-900 dark:text-white">
+                      <div className="flex items-center justify-between border-b border-slate-200/60 dark:border-slate-800 pb-2.5">
+                        <span className="text-sm font-bold text-slate-900 dark:text-white">
                           {term.label}
                         </span>
-                        <span className="text-[11px] font-semibold text-slate-400">
+                        <span className="text-xs font-semibold text-slate-400">
                           {term.totalUnits} Units
                         </span>
                       </div>
 
-                      <div className="space-y-1.5">
+                      <div className="space-y-2">
                         {term.courses.map((c) => {
                           const isMinor = c.isMinor;
                           return (
                             <div
                               key={c.code}
-                              className="p-2.5 bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 rounded-xl flex items-center justify-between text-xs"
+                              className="p-3 bg-white dark:bg-slate-800 border border-slate-200/60 dark:border-slate-700 rounded-2xl flex items-center justify-between text-xs sm:text-sm"
                             >
                               <div>
                                 <span className="font-bold text-slate-900 dark:text-white block">
                                   {c.code} ({c.units}u)
                                 </span>
-                                <span className="text-[11px] text-slate-500 dark:text-slate-400 line-clamp-1">
+                                <span className="text-xs text-slate-500 dark:text-slate-400 line-clamp-1">
                                   {c.title}
                                 </span>
                               </div>
@@ -591,9 +591,9 @@ export default function App() {
                                 <button
                                   type="button"
                                   onClick={() => setSwapTarget({ termId: term.id, oldCode: c.code })}
-                                  className="flex items-center space-x-1 px-2.5 py-1 text-[10px] font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg hover:bg-amber-100"
+                                  className="flex items-center space-x-1 px-3 py-1.5 text-xs font-bold text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-xl hover:bg-amber-100"
                                 >
-                                  <Edit3 className="w-3 h-3" />
+                                  <Edit3 className="w-3.5 h-3.5" />
                                   <span>Change / Swap</span>
                                 </button>
                               )}
@@ -607,7 +607,7 @@ export default function App() {
             </div>
 
             {/* Start Over / Re-Audit Button */}
-            <div className="pt-2 border-t border-slate-100 dark:border-slate-800 text-center">
+            <div className="pt-3 border-t border-slate-100 dark:border-slate-800 text-center">
               <button
                 type="button"
                 onClick={() => { setStep(1); setAuditTermIndex(0); setHasChosenSemCount(false); }}
@@ -623,14 +623,14 @@ export default function App() {
 
       </div>
 
-      {/* LARGE MULTI-SELECT COURSE PICKER MODAL */}
+      {/* SPACIOUS MULTI-SELECT COURSE PICKER MODAL (max-w-5xl) */}
       {showAddCourseModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-slate-900/60 backdrop-blur-md">
-          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 shadow-2xl w-full max-w-2xl max-h-[85vh] flex flex-col space-y-4 overflow-hidden">
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4 sm:p-6 bg-slate-900/60 backdrop-blur-md">
+          <div className="bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl w-full max-w-5xl max-h-[88vh] flex flex-col space-y-4 overflow-hidden">
             
             <div className="flex items-center justify-between pb-3 border-b border-slate-100 dark:border-slate-800">
               <div>
-                <h3 className="text-base font-bold text-slate-900 dark:text-white">
+                <h3 className="text-lg font-bold text-slate-900 dark:text-white">
                   Select Courses for {currentTermLabel}
                 </h3>
                 <p className="text-xs text-slate-400">
@@ -653,12 +653,12 @@ export default function App() {
                 placeholder="Search subject code or title..."
                 value={searchQuery}
                 onChange={(e) => setSearchQuery(e.target.value)}
-                className="w-full pl-10 pr-4 py-2.5 text-xs bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
+                className="w-full pl-10 pr-4 py-2.5 text-xs sm:text-sm bg-slate-50 dark:bg-slate-800 border border-slate-200 dark:border-slate-700 rounded-xl text-slate-900 dark:text-white focus:outline-none focus:ring-2 focus:ring-brand-500"
               />
             </div>
 
             {/* Course checklist grid */}
-            <div className="space-y-2 flex-1 overflow-y-auto pr-1">
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 flex-1 overflow-y-auto pr-1">
               {filteredCatalogToAdd.map((course) => {
                 const isSelected = selectedModalCourses.some(c => c.code === course.code);
 
@@ -666,31 +666,31 @@ export default function App() {
                   <div
                     key={course.code}
                     onClick={() => toggleModalCourseSelection(course)}
-                    className={`p-3.5 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
+                    className={`p-4 rounded-2xl border cursor-pointer transition-all flex items-center justify-between ${
                       isSelected
                         ? 'bg-brand-50 dark:bg-brand-950/40 border-brand-500 ring-1 ring-brand-500'
                         : 'bg-slate-50 dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-750 border-slate-200 dark:border-slate-700'
                     }`}
                   >
-                    <div className="flex items-center space-x-3">
-                      <div className={`w-5 h-5 rounded-lg flex items-center justify-center border transition-colors ${
+                    <div className="flex items-center space-x-3 min-w-0 pr-2">
+                      <div className={`w-5 h-5 rounded-lg flex items-center justify-center border transition-colors shrink-0 ${
                         isSelected ? 'bg-brand-500 border-brand-500 text-white' : 'border-slate-300 dark:border-slate-600 bg-white dark:bg-slate-700'
                       }`}>
                         {isSelected && <CheckCircle2 className="w-3.5 h-3.5" />}
                       </div>
 
-                      <div>
-                        <span className="text-xs font-bold text-slate-900 dark:text-white block">
+                      <div className="min-w-0">
+                        <span className="text-xs sm:text-sm font-bold text-slate-900 dark:text-white block truncate">
                           {course.code} ({course.units}u)
                         </span>
-                        <span className="text-[11px] text-slate-500 dark:text-slate-400">
+                        <span className="text-xs text-slate-500 dark:text-slate-400 truncate block">
                           {course.title}
                         </span>
                       </div>
                     </div>
 
-                    <span className="text-xs font-bold text-slate-400">
-                      Year {course.yearLevel} • {course.semester} Sem
+                    <span className="text-xs font-bold text-slate-400 shrink-0">
+                      Y{course.yearLevel} • {course.semester} Sem
                     </span>
                   </div>
                 );
@@ -715,7 +715,7 @@ export default function App() {
                   type="button"
                   disabled={selectedModalCourses.length === 0}
                   onClick={handleBatchAddSelectedCourses}
-                  className="px-5 py-2.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-brand-500/20"
+                  className="px-6 py-2.5 bg-brand-500 hover:bg-brand-600 disabled:opacity-50 text-white text-xs font-bold rounded-xl transition-all shadow-md shadow-brand-500/20"
                 >
                   Add Selected Courses ({selectedModalCourses.length})
                 </button>
