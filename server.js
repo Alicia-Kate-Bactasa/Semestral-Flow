@@ -53,8 +53,8 @@ app.use('/api', prospectusRoutes);
 const clientBuildPath = path.join(__dirname, 'client', 'build');
 app.use(express.static(clientBuildPath));
 
-// Catch-all route to serve React index.html for root path '/' and all non-API paths
-app.get('*', (req, res, next) => {
+// Catch-all route for Express 5 (path-to-regexp v8 compatible)
+app.get('(.*)', (req, res, next) => {
   if (req.path.startsWith('/api')) {
     return next();
   }
